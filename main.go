@@ -9,16 +9,17 @@ import (
 	"github.com/hajimehoshi/ebiten/ebitenutil"
 )
 
-var op *ebiten.DrawImageOptions
 var x int
 var y int
 var keyBuf ebiten.Key
+var lastDir ebiten.Key
 var imgFrameNum int
-var attack bool
-var img MetaImage
-var linkSprites map[string]MetaImage
+var animation bool
+var img Sprite
+var linkSprites map[string]Sprite
+var op *ebiten.DrawImageOptions
 
-type MetaImage struct {
+type Sprite struct {
 	FrameLen    int
 	FrameHeight int
 	FrameWidth  int
@@ -30,15 +31,17 @@ func init() {
 	y = 0
 	imgFrameNum = 0
 	keyBuf = -1
+	lastDir = ebiten.KeyDown
+	animation = false
 	op = &ebiten.DrawImageOptions{}
 
-	linkSprites = map[string]MetaImage{}
+	linkSprites = map[string]Sprite{}
 
 	linkStandSouth, _, err := ebitenutil.NewImageFromFile("link_stand_south.png", 0)
 	if err != nil {
 		log.Fatal(err)
 	}
-	linkSprites["linkStandSouth"] = MetaImage{
+	linkSprites["linkStandSouth"] = Sprite{
 		FrameLen:    1,
 		FrameHeight: 26,
 		FrameWidth:  16,
@@ -49,7 +52,7 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	linkSprites["linkStandNorth"] = MetaImage{
+	linkSprites["linkStandNorth"] = Sprite{
 		FrameLen:    1,
 		FrameHeight: 26,
 		FrameWidth:  16,
@@ -60,7 +63,7 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	linkSprites["linkStandWest"] = MetaImage{
+	linkSprites["linkStandWest"] = Sprite{
 		FrameLen:    1,
 		FrameHeight: 24,
 		FrameWidth:  17,
@@ -71,7 +74,7 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	linkSprites["linkStandEast"] = MetaImage{
+	linkSprites["linkStandEast"] = Sprite{
 		FrameLen:    1,
 		FrameHeight: 24,
 		FrameWidth:  17,
@@ -82,7 +85,7 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	linkSprites["linkWalkSouth"] = MetaImage{
+	linkSprites["linkWalkSouth"] = Sprite{
 		FrameLen:    8,
 		FrameHeight: 26,
 		FrameWidth:  16,
@@ -93,7 +96,7 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	linkSprites["linkWalkNorth"] = MetaImage{
+	linkSprites["linkWalkNorth"] = Sprite{
 		FrameLen:    8,
 		FrameHeight: 26,
 		FrameWidth:  16,
@@ -104,10 +107,10 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	linkSprites["linkWalkWest"] = MetaImage{
+	linkSprites["linkWalkWest"] = Sprite{
 		FrameLen:    8,
 		FrameHeight: 25,
-		FrameWidth:  17,
+		FrameWidth:  18,
 		Image:       linkWalkWest,
 	}
 
@@ -115,18 +118,51 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	linkSprites["linkWalkEast"] = MetaImage{
+	linkSprites["linkWalkEast"] = Sprite{
 		FrameLen:    8,
 		FrameHeight: 25,
-		FrameWidth:  17,
+		FrameWidth:  18,
 		Image:       linkWalkEast,
+	}
+
+	linkAttackSouth, _, err := ebitenutil.NewImageFromFile("link_attack_south.png", 0)
+	if err != nil {
+		log.Fatal(err)
+	}
+	linkSprites["linkAttackSouth"] = Sprite{
+		FrameLen:    8,
+		FrameHeight: 24,
+		FrameWidth:  16,
+		Image:       linkAttackSouth,
+	}
+
+	linkAttackNorth, _, err := ebitenutil.NewImageFromFile("link_attack_north.png", 0)
+	if err != nil {
+		log.Fatal(err)
+	}
+	linkSprites["linkAttackNorth"] = Sprite{
+		FrameLen:    8,
+		FrameHeight: 29,
+		FrameWidth:  16,
+		Image:       linkAttackNorth,
+	}
+
+	linkAttackWest, _, err := ebitenutil.NewImageFromFile("link_attack_west.png", 0)
+	if err != nil {
+		log.Fatal(err)
+	}
+	linkSprites["linkAttackWest"] = Sprite{
+		FrameLen:    8,
+		FrameHeight: 24,
+		FrameWidth:  20,
+		Image:       linkAttackWest,
 	}
 
 	linkAttackEast, _, err := ebitenutil.NewImageFromFile("link_attack_east.png", 0)
 	if err != nil {
 		log.Fatal(err)
 	}
-	linkSprites["linkAttackEast"] = MetaImage{
+	linkSprites["linkAttackEast"] = Sprite{
 		FrameLen:    8,
 		FrameHeight: 24,
 		FrameWidth:  20,
@@ -140,76 +176,80 @@ type Game struct{}
 
 func (g *Game) Update(screen *ebiten.Image) error {
 
+	if img.FrameLen > 1 {
+		imgFrameNum++
+		imgFrameNum = imgFrameNum % (img.FrameLen - 1)
+		// End the animation if the last render was the last frame
+		if animation && imgFrameNum == 0 {
+			animation = false
+		}
+	}
+
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
 		if keyBuf != ebiten.KeyLeft {
 			keyBuf = ebiten.KeyLeft
+			lastDir = ebiten.KeyLeft
 			imgFrameNum = 0
 			img = linkSprites["linkWalkWest"]
-		} else {
-			imgFrameNum++
-			imgFrameNum = imgFrameNum % (img.FrameLen - 1)
 		}
 		x--
 	} else if ebiten.IsKeyPressed(ebiten.KeyRight) {
 		if keyBuf != ebiten.KeyRight {
 			keyBuf = ebiten.KeyRight
+			lastDir = ebiten.KeyRight
 			imgFrameNum = 0
 			img = linkSprites["linkWalkEast"]
-		} else {
-			imgFrameNum++
-			imgFrameNum = imgFrameNum % (img.FrameLen - 1)
 		}
 		x++
 	} else if ebiten.IsKeyPressed(ebiten.KeyUp) {
 		if keyBuf != ebiten.KeyUp {
 			keyBuf = ebiten.KeyUp
+			lastDir = ebiten.KeyUp
 			imgFrameNum = 0
 			img = linkSprites["linkWalkNorth"]
-		} else {
-			imgFrameNum++
-			imgFrameNum = imgFrameNum % (img.FrameLen - 1)
 		}
 		y--
 	} else if ebiten.IsKeyPressed(ebiten.KeyDown) {
 		if keyBuf != ebiten.KeyDown {
 			keyBuf = ebiten.KeyDown
+			lastDir = ebiten.KeyDown
 			imgFrameNum = 0
 			img = linkSprites["linkWalkSouth"]
-		} else {
-			imgFrameNum++
-			imgFrameNum = imgFrameNum % (img.FrameLen - 1)
 		}
 		y++
 	} else {
-		if keyBuf == ebiten.KeyLeft {
+		if !animation && lastDir == ebiten.KeyLeft {
+			keyBuf = -1
+			imgFrameNum = 0
 			img = linkSprites["linkStandWest"]
-		}
-		if keyBuf == ebiten.KeyRight {
+		} else if !animation && lastDir == ebiten.KeyRight {
+			keyBuf = -1
+			imgFrameNum = 0
 			img = linkSprites["linkStandEast"]
-		}
-		if keyBuf == ebiten.KeyUp {
+		} else if !animation && lastDir == ebiten.KeyUp {
+			keyBuf = -1
+			imgFrameNum = 0
 			img = linkSprites["linkStandNorth"]
-		}
-		if keyBuf == ebiten.KeyDown {
+		} else if !animation && lastDir == ebiten.KeyDown {
+			keyBuf = -1
+			imgFrameNum = 0
 			img = linkSprites["linkStandSouth"]
 		}
-		keyBuf = -1
-		if !attack {
-			imgFrameNum = 0
-		}
 	}
 
-	if attack {
-		imgFrameNum++ // passing up the limit and going blank here
-		if imgFrameNum >= img.FrameLen {
-			attack = false
-		}
-	}
-
-	if !attack && ebiten.IsKeyPressed(ebiten.KeySpace) {
-		attack = true
-		img = linkSprites["linkAttackEast"]
+	// If starting an animation
+	if !animation && ebiten.IsKeyPressed(ebiten.KeySpace) {
+		animation = true
 		imgFrameNum = 0
+		if lastDir == ebiten.KeyLeft {
+			img = linkSprites["linkAttackWest"]
+		} else if lastDir == ebiten.KeyRight {
+			img = linkSprites["linkAttackEast"]
+		} else if lastDir == ebiten.KeyUp {
+			img = linkSprites["linkAttackNorth"]
+		} else if lastDir == ebiten.KeyDown {
+			img = linkSprites["linkAttackSouth"]
+		}
 	}
 
 	return nil
@@ -218,6 +258,7 @@ func (g *Game) Update(screen *ebiten.Image) error {
 func (g *Game) Draw(screen *ebiten.Image) {
 	op.GeoM.Reset()
 	op.GeoM.Translate(float64(x), float64(y))
+	// sub-rect is the width of a frame times the frame number, plus the frame number for the 1-pixel buffer between frames
 	screen.DrawImage(img.Image.SubImage(image.Rect(img.FrameWidth*imgFrameNum+imgFrameNum, 0, img.FrameWidth*imgFrameNum+imgFrameNum+img.FrameWidth, img.FrameHeight)).(*ebiten.Image), op)
 }
 
