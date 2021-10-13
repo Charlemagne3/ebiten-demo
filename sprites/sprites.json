@@ -1,0 +1,80 @@
+[
+    {
+        "frameLen": 1,
+        "frameHeight": 26,
+        "frameWidth": 16,
+        "image": "link_stand_south.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 26,
+        "frameWidth": 16,
+        "image": "link_stand_north.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 17,
+        "image": "link_stand_west.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 17,
+        "image": "link_stand_east.png"
+    },
+    {
+        "frameLen": 8,
+        "frameHeight": 26,
+        "frameWidth": 16,
+        "image": "link_walk_south.png"
+    },
+    {
+        "frameLen": 8,
+        "frameHeight": 26,
+        "frameWidth": 16,
+        "image": "link_walk_north.png"
+    },
+    {
+        "frameLen": 8,
+        "frameHeight": 25,
+        "frameWidth": 18,
+        "image": "link_walk_west.png"
+    },
+    {
+        "frameLen": 8,
+        "frameHeight": 25,
+        "frameWidth": 18,
+        "image": "link_walk_east.png"
+    },
+    {
+        "frameLen": 8,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "link_attack_south.png"
+    },
+    {
+        "frameLen": 8,
+        "frameHeight": 29,
+        "frameWidth": 16,
+        "image": "link_attack_north.png"
+    },
+    {
+        "frameLen": 8,
+        "frameHeight": 24,
+        "frameWidth": 20,
+        "image": "link_attack_west.png"
+    },
+    {
+        "frameLen": 8,
+        "frameHeight": 24,
+        "frameWidth": 20,
+        "image": "link_attack_east.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 32,
+        "frameWidth": 32,
+        "image": "stump.png"
+    }
+]
