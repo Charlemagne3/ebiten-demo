@@ -10,6 +10,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/hajimehoshi/ebiten/ebitenutil"
+	"github.com/hajimehoshi/ebiten/inpututil"
 )
 
 // Game is an ebiten Game interface implemetation plus custom struct data
@@ -24,7 +25,6 @@ type Player struct {
 	X         int        // The current X screen offset of the player
 	Y         int        // The current Y screen offset of the player
 	Animation bool       // Whether or not the player is in a special animation or the normal stand/walk cycle.
-	KeyBuf    ebiten.Key // The key pressed on the last frame or -1
 	LastDir   ebiten.Key // The last direction the player faced (never -1)
 	Sprite    Sprite     // The current sprite for the player
 	FrameNum  int        // The current frame of the sprite for the player
@@ -46,35 +46,26 @@ type SpriteJSON struct {
 	Image       string `json:"image"`
 }
 
-type Rect struct {
-	X int
-	Y int
-	W int
-	H int
-}
-
-// IsCollision checks if each vertex of rectangle is inside another rectangle
-func IsCollision(r0, r1 Rect) bool {
-	return r0.X > r1.X && r0.X < r1.X+r1.W && r0.Y > r1.Y && r0.Y < r1.Y+r1.H ||
-		r0.X+r0.W > r1.X && r0.X+r0.W < r1.X+r1.W && r0.Y > r1.Y && r0.Y < r1.Y+r1.H ||
-		r0.X > r1.X && r0.X < r1.X+r1.W && r0.Y+r0.H > r1.Y && r0.Y+r0.H < r1.Y+r1.H ||
-		r0.X+r0.W > r1.X && r0.X+r0.W < r1.X+r1.W && r0.Y+r0.H > r1.Y && r0.Y+r0.H < r1.Y+r1.H
+// IsOtherDirectionJustReleased checks if one of the three cardinal directions other than the key passed in was just released
+func IsOtherDirectionJustReleased(key ebiten.Key) bool {
+	switch key {
+	case ebiten.KeyLeft:
+		return inpututil.IsKeyJustReleased(ebiten.KeyRight) || inpututil.IsKeyJustReleased(ebiten.KeyUp) || inpututil.IsKeyJustReleased(ebiten.KeyDown)
+	case ebiten.KeyRight:
+		return inpututil.IsKeyJustReleased(ebiten.KeyLeft) || inpututil.IsKeyJustReleased(ebiten.KeyUp) || inpututil.IsKeyJustReleased(ebiten.KeyDown)
+	case ebiten.KeyUp:
+		return inpututil.IsKeyJustReleased(ebiten.KeyLeft) || inpututil.IsKeyJustReleased(ebiten.KeyRight) || inpututil.IsKeyJustReleased(ebiten.KeyDown)
+	case ebiten.KeyDown:
+		return inpututil.IsKeyJustReleased(ebiten.KeyLeft) || inpututil.IsKeyJustReleased(ebiten.KeyRight) || inpututil.IsKeyJustReleased(ebiten.KeyUp)
+	default:
+		return false
+	}
 }
 
 func (g *Game) Update(screen *ebiten.Image) error {
-	playerRect := Rect{
-		X: g.Player.X,
-		Y: g.Player.Y,
-		W: g.Player.Sprite.FrameWidth,
-		H: g.Player.Sprite.FrameHeight,
-	}
 
-	otherRect := Rect{
-		X: 100,
-		Y: 100,
-		W: 32,
-		H: 32,
-	}
+	otherRect := image.Rect(100, 100, 132, 132)
+	animEnd := false
 
 	if g.Player.Sprite.FrameLen > 1 {
 		g.Player.FrameNum++
@@ -83,65 +74,76 @@ func (g *Game) Update(screen *ebiten.Image) error {
 		// End the animation if the last render was the last frame
 		if g.Player.Animation && g.Player.FrameNum == 0 {
 			g.Player.Animation = false
+			animEnd = true
 		}
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
-		if g.Player.KeyBuf != ebiten.KeyLeft {
-			g.Player.KeyBuf = ebiten.KeyLeft
+		// Start the walk left animation if the player just pressed left or if an animation ended and the player was already moving left
+		if inpututil.IsKeyJustPressed(ebiten.KeyLeft) || IsOtherDirectionJustReleased(ebiten.KeyLeft) || animEnd {
 			g.Player.LastDir = ebiten.KeyLeft
 			g.Player.FrameNum = 0
 			g.Player.Sprite = g.Sprites["linkWalkWest"]
 		}
-		if !IsCollision(playerRect, otherRect) {
+		// Move the min point down by half the render rect height for collision detection to allow for an overlap effect
+		playerRect := image.Rect(g.Player.X-1, g.Player.Y+g.Player.Sprite.FrameHeight/2, g.Player.X-1+g.Player.Sprite.FrameWidth, g.Player.Y+g.Player.Sprite.FrameHeight)
+		if !playerRect.Overlaps(otherRect) {
 			g.Player.X--
 		}
-	} else if ebiten.IsKeyPressed(ebiten.KeyRight) {
-		if g.Player.KeyBuf != ebiten.KeyRight {
-			g.Player.KeyBuf = ebiten.KeyRight
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyRight) {
+		// Start the walk right animation if the player just pressed right or if an animation ended and the player was already moving right
+		if inpututil.IsKeyJustPressed(ebiten.KeyRight) || IsOtherDirectionJustReleased(ebiten.KeyRight) || animEnd {
 			g.Player.LastDir = ebiten.KeyRight
 			g.Player.FrameNum = 0
 			g.Player.Sprite = g.Sprites["linkWalkEast"]
 		}
-		if !IsCollision(playerRect, otherRect) {
+		// Move the min point down by half the render rect height for collision detection to allow for an overlap effect
+		playerRect := image.Rect(g.Player.X+1, g.Player.Y+g.Player.Sprite.FrameHeight/2, g.Player.X+1+g.Player.Sprite.FrameWidth, g.Player.Y+g.Player.Sprite.FrameHeight)
+		if !playerRect.Overlaps(otherRect) {
 			g.Player.X++
 		}
-	} else if ebiten.IsKeyPressed(ebiten.KeyUp) {
-		if g.Player.KeyBuf != ebiten.KeyUp {
-			g.Player.KeyBuf = ebiten.KeyUp
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyUp) {
+		// Start the walk up animation if the player just pressed up or if an animation ended and the player was already moving up
+		if inpututil.IsKeyJustPressed(ebiten.KeyUp) || IsOtherDirectionJustReleased(ebiten.KeyUp) || animEnd {
 			g.Player.LastDir = ebiten.KeyUp
 			g.Player.FrameNum = 0
 			g.Player.Sprite = g.Sprites["linkWalkNorth"]
 		}
-		if !IsCollision(playerRect, otherRect) {
+		// Move the min point down by half the render rect height for collision detection to allow for an overlap effect
+		playerRect := image.Rect(g.Player.X, g.Player.Y-1+g.Player.Sprite.FrameHeight/2, g.Player.X+g.Player.Sprite.FrameWidth, g.Player.Y-1+g.Player.Sprite.FrameHeight)
+		if !playerRect.Overlaps(otherRect) {
 			g.Player.Y--
 		}
-	} else if ebiten.IsKeyPressed(ebiten.KeyDown) {
-		if g.Player.KeyBuf != ebiten.KeyDown {
-			g.Player.KeyBuf = ebiten.KeyDown
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyDown) {
+		// Start the walk down animation if the player just pressed down or if an animation ended and the player was already moving down
+		if inpututil.IsKeyJustPressed(ebiten.KeyDown) || IsOtherDirectionJustReleased(ebiten.KeyDown) || animEnd {
 			g.Player.LastDir = ebiten.KeyDown
 			g.Player.FrameNum = 0
 			g.Player.Sprite = g.Sprites["linkWalkSouth"]
 		}
-		if !IsCollision(playerRect, otherRect) {
+		// Move the min point down by half the render rect height for collision detection to allow for an overlap effect
+		playerRect := image.Rect(g.Player.X, g.Player.Y+1+g.Player.Sprite.FrameHeight/2, g.Player.X+g.Player.Sprite.FrameWidth, g.Player.Y+1+g.Player.Sprite.FrameHeight)
+		if !playerRect.Overlaps(otherRect) {
 			g.Player.Y++
 		}
-	} else {
-		if !g.Player.Animation && g.Player.LastDir == ebiten.KeyLeft {
-			g.Player.KeyBuf = -1
-			g.Player.FrameNum = 0
+	}
+
+	// If no direction is pressed and the player is not in an animation, select a standing sprite based on the last direction the player moved
+	if !ebiten.IsKeyPressed(ebiten.KeyLeft) && !ebiten.IsKeyPressed(ebiten.KeyRight) && !ebiten.IsKeyPressed(ebiten.KeyUp) && !ebiten.IsKeyPressed(ebiten.KeyDown) && !g.Player.Animation {
+		g.Player.FrameNum = 0
+		if g.Player.LastDir == ebiten.KeyLeft {
 			g.Player.Sprite = g.Sprites["linkStandWest"]
-		} else if !g.Player.Animation && g.Player.LastDir == ebiten.KeyRight {
-			g.Player.KeyBuf = -1
-			g.Player.FrameNum = 0
+		} else if g.Player.LastDir == ebiten.KeyRight {
 			g.Player.Sprite = g.Sprites["linkStandEast"]
-		} else if !g.Player.Animation && g.Player.LastDir == ebiten.KeyUp {
-			g.Player.KeyBuf = -1
-			g.Player.FrameNum = 0
+		} else if g.Player.LastDir == ebiten.KeyUp {
 			g.Player.Sprite = g.Sprites["linkStandNorth"]
-		} else if !g.Player.Animation && g.Player.LastDir == ebiten.KeyDown {
-			g.Player.KeyBuf = -1
-			g.Player.FrameNum = 0
+		} else if g.Player.LastDir == ebiten.KeyDown {
 			g.Player.Sprite = g.Sprites["linkStandSouth"]
 		}
 	}
@@ -230,7 +232,6 @@ func main() {
 		Player: Player{
 			X:         0,
 			Y:         0,
-			KeyBuf:    -1,
 			LastDir:   ebiten.KeyDown,
 			Animation: false,
 			FrameNum:  0,
