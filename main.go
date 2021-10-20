@@ -3,14 +3,20 @@ package main
 import (
 	"encoding/json"
 	"image"
+	"image/color"
 	_ "image/png"
 	"log"
 	"os"
 	"strings"
 
-	"github.com/hajimehoshi/ebiten"
-	"github.com/hajimehoshi/ebiten/ebitenutil"
-	"github.com/hajimehoshi/ebiten/inpututil"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/gofont/goregular"
+	"golang.org/x/image/font/opentype"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/text"
 )
 
 type Collider interface {
@@ -19,10 +25,14 @@ type Collider interface {
 
 // Game is an ebiten Game interface implemetation plus custom struct data
 type Game struct {
-	Player  Player
-	Doodads []Doodad
-	Sprites map[string]Sprite
-	Options *ebiten.DrawImageOptions
+	Player      Player
+	Characters  []Character
+	Enemies     []Enemy
+	Doodads     []Doodad
+	Sprites     map[string]Sprite
+	Font        font.Face
+	Options     *ebiten.DrawImageOptions
+	Interaction bool // Whether or not the player is in a dialogue with another character
 }
 
 // Player represents the player character
@@ -35,12 +45,32 @@ type Player struct {
 	FrameNum  int        // The current frame of the sprite for the player
 }
 
+// Character represents an npc character
+type Character struct {
+	X         int        // The current X screen offset of the character
+	Y         int        // The current Y screen offset of the character
+	Animation bool       // Whether or not the character is in a special animation or the normal stand/walk cycle.
+	LastDir   ebiten.Key // The last direction the character faced (never -1)
+	Sprite    Sprite     // The current sprite for the character
+	FrameNum  int        // The current frame of the sprite for the character
+}
+
+// Enemy represents an enemy
+type Enemy struct {
+	X         int        // The current X screen offset of the enemy
+	Y         int        // The current Y screen offset of the enemy
+	Animation bool       // Whether or not the enemy is in a special animation or the normal stand/walk cycle.
+	LastDir   ebiten.Key // The last direction the enemy faced (never -1)
+	Sprite    Sprite     // The current sprite for the enemy
+	FrameNum  int        // The current frame of the sprite for the enemy
+}
+
 // Doodad represents a static environmental item
 type Doodad struct {
-	X        int    // The current X screen offset of the player
-	Y        int    // The current Y screen offset of the player
-	Sprite   Sprite // The current sprite for the player
-	FrameNum int    // The current frame of the sprite for the player
+	X        int    // The current X screen offset of the doodad
+	Y        int    // The current Y screen offset of the doodad
+	Sprite   Sprite // The current sprite for the doodad
+	FrameNum int    // The current frame of the sprite for the doodad
 }
 
 // Sprite represents an image with a number of sub-frames in it to be rendered via rectangles
@@ -104,6 +134,19 @@ func (p *Player) Hitbox(x, y int, flat bool) image.Rectangle {
 	return image.Rect(p.X+x-p.Sprite.FrameWidth/2, p.Y+y-offset, p.X+x+p.Sprite.FrameWidth/2, p.Y+y)
 }
 
+// Hitbox returns a character hitbox rectanle offset by x and y, and simulates perspective if flat is false
+func (c *Character) Hitbox(x, y int, flat bool) image.Rectangle {
+	// ebiten renders from the min vertex (top left)
+	// To simulate render from the center of "feet" of sprites, we tranlate up (negative Y) by the sprite height and left (negative X) by half the sprite width
+	// To simulate perspective, we also limit the hitbox to the bottom half of the sprite by translating the min point down (positive Y) by half the sprite height
+	// This results in a translating up (negative Y by half the sprite height)
+	offset := c.Sprite.FrameHeight
+	if !flat {
+		offset /= 2
+	}
+	return image.Rect(c.X+x-c.Sprite.FrameWidth/2, c.Y+y-offset, c.X+x+c.Sprite.FrameWidth/2, c.Y+y)
+}
+
 // Hitbox returns a doodad hitbox rectanle offset by x and y, and simulates perspective if flat is false
 func (d *Doodad) Hitbox(x, y int, flat bool) image.Rectangle {
 	offset := d.Sprite.FrameHeight
@@ -113,7 +156,7 @@ func (d *Doodad) Hitbox(x, y int, flat bool) image.Rectangle {
 	return image.Rect(d.X+x-d.Sprite.FrameWidth/2, d.Y+y-offset, d.X+x+d.Sprite.FrameWidth/2, d.Y+y)
 }
 
-func (g *Game) Update(screen *ebiten.Image) error {
+func (g *Game) Update() error {
 
 	animEnd := false
 
@@ -144,6 +187,13 @@ func (g *Game) Update(screen *ebiten.Image) error {
 				break
 			}
 		}
+		for _, v := range g.Characters {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, false))
+			if isCollision {
+				move = false
+				break
+			}
+		}
 		if move {
 			g.Player.X--
 		}
@@ -160,6 +210,13 @@ func (g *Game) Update(screen *ebiten.Image) error {
 		move := true
 		for _, v := range g.Doodads {
 			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, true))
+			if isCollision {
+				move = false
+				break
+			}
+		}
+		for _, v := range g.Characters {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, false))
 			if isCollision {
 				move = false
 				break
@@ -186,6 +243,13 @@ func (g *Game) Update(screen *ebiten.Image) error {
 				break
 			}
 		}
+		for _, v := range g.Characters {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, false))
+			if isCollision {
+				move = false
+				break
+			}
+		}
 		if move {
 			g.Player.Y--
 		}
@@ -202,6 +266,13 @@ func (g *Game) Update(screen *ebiten.Image) error {
 		move := true
 		for _, v := range g.Doodads {
 			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, true))
+			if isCollision {
+				move = false
+				break
+			}
+		}
+		for _, v := range g.Characters {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, false))
 			if isCollision {
 				move = false
 				break
@@ -241,6 +312,34 @@ func (g *Game) Update(screen *ebiten.Image) error {
 		}
 	}
 
+	// If starting an interaction
+	if !g.Player.Animation && inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
+		for _, v := range g.Characters {
+			playerRect := g.Player.Hitbox(0, 0, false)
+			characterRect := v.Hitbox(0, 0, false)
+			if playerRect.Max.X-characterRect.Min.X <= 1 {
+				g.Interaction = true
+				g.Player.FrameNum = 0
+				g.Player.Sprite = g.Sprites["linkStandEast"]
+			}
+			if playerRect.Max.Y-characterRect.Min.Y <= 1 {
+				g.Interaction = true
+				g.Player.FrameNum = 0
+				g.Player.Sprite = g.Sprites["linkStandSouth"]
+			}
+			if characterRect.Max.X-playerRect.Min.X <= 1 {
+				g.Interaction = true
+				g.Player.FrameNum = 0
+				g.Player.Sprite = g.Sprites["linkStandWest"]
+			}
+			if characterRect.Max.Y-playerRect.Min.Y <= 1 {
+				g.Interaction = true
+				g.Player.FrameNum = 0
+				g.Player.Sprite = g.Sprites["linkStandNorth"]
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -248,13 +347,29 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	for _, d := range g.Doodads {
 		g.Options.GeoM.Reset()
 		g.Options.GeoM.Translate(float64(d.X-d.Sprite.FrameWidth/2), float64(d.Y-d.Sprite.FrameHeight))
-		screen.DrawImage(g.Sprites["stump"].Image, g.Options)
+		screen.DrawImage(d.Sprite.Image, g.Options)
+	}
+
+	for _, c := range g.Characters {
+		g.Options.GeoM.Reset()
+		// ebiten renders from the min vertex (top left). Offset by the frameheight and half the framewidth to emulate rendering from the "feet" of the sprite
+		g.Options.GeoM.Translate(float64(c.X-c.Sprite.FrameWidth/2), float64(c.Y-c.Sprite.FrameHeight))
+		// sub-rect is the width of a frame times the frame number, plus the frame number for the 1-pixel buffer between frames
+		screen.DrawImage(c.Sprite.Image.SubImage(image.Rect(c.Sprite.FrameWidth*c.FrameNum+c.FrameNum, 0, c.Sprite.FrameWidth*c.FrameNum+c.FrameNum+c.Sprite.FrameWidth, c.Sprite.FrameHeight)).(*ebiten.Image), g.Options)
 	}
 
 	g.Options.GeoM.Reset()
+	// ebiten renders from the min vertex (top left). Offset by the frameheight and half the framewidth to emulate rendering from the "feet" of the sprite
 	g.Options.GeoM.Translate(float64(g.Player.X-g.Player.Sprite.FrameWidth/2), float64(g.Player.Y-g.Player.Sprite.FrameHeight))
 	// sub-rect is the width of a frame times the frame number, plus the frame number for the 1-pixel buffer between frames
 	screen.DrawImage(g.Player.Sprite.Image.SubImage(image.Rect(g.Player.Sprite.FrameWidth*g.Player.FrameNum+g.Player.FrameNum, 0, g.Player.Sprite.FrameWidth*g.Player.FrameNum+g.Player.FrameNum+g.Player.Sprite.FrameWidth, g.Player.Sprite.FrameHeight)).(*ebiten.Image), g.Options)
+
+	if g.Interaction {
+		g.Options.GeoM.Reset()
+		g.Options.GeoM.Scale(10, 1)
+		screen.DrawImage(g.Sprites["dialogueFrame"].Image, g.Options)
+		text.Draw(screen, "Interaction", g.Font, 10, 25, color.White)
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -266,6 +381,10 @@ func main() {
 	ebiten.SetWindowTitle("grame")
 
 	sprites, err := os.ReadFile("./sprites/sprites.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	var jsonSprites []SpriteJSON
 	err = json.Unmarshal(sprites, &jsonSprites)
 	if err != nil {
@@ -274,7 +393,7 @@ func main() {
 
 	linkSprites := map[string]Sprite{}
 	for _, v := range jsonSprites {
-		sprite, _, err := ebitenutil.NewImageFromFile("./sprites/"+v.Image, 0)
+		sprite, _, err := ebitenutil.NewImageFromFile("./sprites/" + v.Image)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -289,7 +408,7 @@ func main() {
 				snek = true
 				continue
 			}
-			if snek == true {
+			if snek {
 				snek = false
 				k += strings.ToUpper(char)
 			} else {
@@ -306,6 +425,21 @@ func main() {
 	}
 
 	sprite := linkSprites["linkStandSouth"]
+
+	f, err := opentype.Parse(goregular.TTF)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	face, err := opentype.NewFace(f, &opentype.FaceOptions{
+		Size:    32,
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	op := &ebiten.DrawImageOptions{}
 
 	game := &Game{
@@ -316,6 +450,14 @@ func main() {
 			Animation: false,
 			FrameNum:  0,
 			Sprite:    sprite,
+		},
+		Characters: []Character{
+			{
+				X:        100,
+				Y:        200,
+				FrameNum: 0,
+				Sprite:   linkSprites["elderStandSouth"],
+			},
 		},
 		Doodads: []Doodad{
 			{
@@ -332,6 +474,7 @@ func main() {
 			},
 		},
 		Sprites: linkSprites,
+		Font:    face,
 		Options: op,
 	}
 

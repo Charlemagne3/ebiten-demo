@@ -72,9 +72,21 @@
         "image": "link_attack_east.png"
     },
     {
+        "frameLen": 2,
+        "frameHeight": 21,
+        "frameWidth": 22,
+        "image": "elder_stand_south.png"
+    },
+    {
         "frameLen": 1,
         "frameHeight": 32,
         "frameWidth": 32,
         "image": "stump.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 42,
+        "frameWidth": 16,
+        "image": "dialogue_frame.png"
     }
 ]
