@@ -19,20 +19,42 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/text"
 )
 
+func Min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+func Max(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
+}
+
 type Collider interface {
 	Hitbox(x, y int, flat bool) image.Rectangle
 }
 
+type InteractionTarget interface {
+	Dialogue() string  // The current dialogue to render
+	AdvanceRune()      // Advances to the next rune
+	AdvancePhrase()    // Advances to the next phrase
+	IsExhausted() bool // Returns true if the current dialogue tree is complete
+	Reset()            // Resets the dialogue tree after being exhausted
+}
+
 // Game is an ebiten Game interface implemetation plus custom struct data
 type Game struct {
-	Player      Player
-	Characters  []Character
-	Enemies     []Enemy
-	Doodads     []Doodad
-	Sprites     map[string]Sprite
-	Font        font.Face
-	Options     *ebiten.DrawImageOptions
-	Interaction bool // Whether or not the player is in a dialogue with another character
+	Player            Player
+	Characters        []Character
+	Enemies           []Enemy
+	Doodads           []Doodad
+	Sprites           map[string]Sprite
+	Font              font.Face
+	Options           *ebiten.DrawImageOptions
+	InteractionTarget InteractionTarget // The target of another game element that the player is having a dialogue interaction with, or nil.
 }
 
 // Player represents the player character
@@ -47,12 +69,38 @@ type Player struct {
 
 // Character represents an npc character
 type Character struct {
-	X         int        // The current X screen offset of the character
-	Y         int        // The current Y screen offset of the character
-	Animation bool       // Whether or not the character is in a special animation or the normal stand/walk cycle.
-	LastDir   ebiten.Key // The last direction the character faced (never -1)
-	Sprite    Sprite     // The current sprite for the character
-	FrameNum  int        // The current frame of the sprite for the character
+	X            int                 // The current X screen offset of the character
+	Y            int                 // The current Y screen offset of the character
+	Animation    bool                // Whether or not the character is in a special animation or the normal stand/walk cycle.
+	LastDir      ebiten.Key          // The last direction the character faced (never -1)
+	Sprite       Sprite              // The current sprite for the character
+	FrameNum     int                 // The current frame of the sprite for the character
+	DialogueTree map[string][]string // The dialogue the character has
+	DialogueKey  string
+	PhraseNum    int
+	RuneNum      int
+}
+
+func (c *Character) Dialogue() string {
+	return c.DialogueTree[c.DialogueKey][c.PhraseNum][:c.RuneNum]
+}
+
+func (c *Character) AdvanceRune() {
+	c.RuneNum = Min(c.RuneNum+1, len(c.DialogueTree[c.DialogueKey][c.PhraseNum]))
+}
+
+func (c *Character) AdvancePhrase() {
+	c.PhraseNum++
+	c.RuneNum = 0
+}
+
+func (c *Character) IsExhausted() bool {
+	return c.PhraseNum >= len(c.DialogueTree[c.DialogueKey])
+}
+
+func (c *Character) Reset() {
+	c.RuneNum = 0
+	c.PhraseNum = 0
 }
 
 // Enemy represents an enemy
@@ -157,6 +205,13 @@ func (d *Doodad) Hitbox(x, y int, flat bool) image.Rectangle {
 }
 
 func (g *Game) Update() error {
+
+	if g.InteractionTarget != nil {
+		g.InteractionTarget.AdvanceRune()
+		if inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
+			g.InteractionTarget.AdvancePhrase()
+		}
+	}
 
 	animEnd := false
 
@@ -313,31 +368,36 @@ func (g *Game) Update() error {
 	}
 
 	// If starting an interaction
-	if !g.Player.Animation && inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
-		for _, v := range g.Characters {
+	if g.InteractionTarget == nil && !g.Player.Animation && inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
+		for _, c := range g.Characters {
 			playerRect := g.Player.Hitbox(0, 0, false)
-			characterRect := v.Hitbox(0, 0, false)
+			characterRect := c.Hitbox(0, 0, false)
 			if playerRect.Max.X-characterRect.Min.X <= 1 {
-				g.Interaction = true
+				g.InteractionTarget = &c
 				g.Player.FrameNum = 0
 				g.Player.Sprite = g.Sprites["linkStandEast"]
 			}
 			if playerRect.Max.Y-characterRect.Min.Y <= 1 {
-				g.Interaction = true
+				g.InteractionTarget = &c
 				g.Player.FrameNum = 0
 				g.Player.Sprite = g.Sprites["linkStandSouth"]
 			}
 			if characterRect.Max.X-playerRect.Min.X <= 1 {
-				g.Interaction = true
+				g.InteractionTarget = &c
 				g.Player.FrameNum = 0
 				g.Player.Sprite = g.Sprites["linkStandWest"]
 			}
 			if characterRect.Max.Y-playerRect.Min.Y <= 1 {
-				g.Interaction = true
+				g.InteractionTarget = &c
 				g.Player.FrameNum = 0
 				g.Player.Sprite = g.Sprites["linkStandNorth"]
 			}
 		}
+	}
+
+	if g.InteractionTarget != nil && g.InteractionTarget.IsExhausted() {
+		g.InteractionTarget.Reset()
+		g.InteractionTarget = nil
 	}
 
 	return nil
@@ -364,11 +424,40 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// sub-rect is the width of a frame times the frame number, plus the frame number for the 1-pixel buffer between frames
 	screen.DrawImage(g.Player.Sprite.Image.SubImage(image.Rect(g.Player.Sprite.FrameWidth*g.Player.FrameNum+g.Player.FrameNum, 0, g.Player.Sprite.FrameWidth*g.Player.FrameNum+g.Player.FrameNum+g.Player.Sprite.FrameWidth, g.Player.Sprite.FrameHeight)).(*ebiten.Image), g.Options)
 
-	if g.Interaction {
+	// If in a text interaction, draw the text box last over eveything else.
+	if g.InteractionTarget != nil {
+		leftWidth := g.Sprites["dialogueFrameLeft"].Image.Bounds().Dx()
+		rightWidth := g.Sprites["dialogueFrameRight"].Image.Bounds().Dx()
+
 		g.Options.GeoM.Reset()
-		g.Options.GeoM.Scale(10, 1)
-		screen.DrawImage(g.Sprites["dialogueFrame"].Image, g.Options)
-		text.Draw(screen, "Interaction", g.Font, 10, 25, color.White)
+		g.Options.GeoM.Scale(39, 1)
+		g.Options.GeoM.Translate(float64(leftWidth), 0)
+		screen.DrawImage(g.Sprites["dialogueFrameCenter"].Image, g.Options)
+
+		g.Options.GeoM.Reset()
+		screen.DrawImage(g.Sprites["dialogueFrameLeft"].Image, g.Options)
+
+		g.Options.GeoM.Translate(float64(320-rightWidth), 0)
+		screen.DrawImage(g.Sprites["dialogueFrameRight"].Image, g.Options)
+
+		dialogue := strings.Split(g.InteractionTarget.Dialogue(), " ")
+		line := 1
+		for i := 0; i < len(dialogue); line++ {
+			var render []string
+			for w := 0; w < 320-leftWidth-rightWidth && i < len(dialogue); i++ {
+				render = append(render, dialogue[i])
+				join := strings.Join(render, " ")
+				bound, _ := font.BoundString(g.Font, join)
+				w = (bound.Max.X - bound.Min.X).Ceil()
+				if w >= 320-leftWidth-rightWidth {
+					i--
+				}
+			}
+			if i < len(dialogue) {
+				render = render[:len(render)-1]
+			}
+			text.Draw(screen, strings.Join(render, " "), g.Font, 8, line*18, color.White)
+		}
 	}
 }
 
@@ -432,7 +521,7 @@ func main() {
 	}
 
 	face, err := opentype.NewFace(f, &opentype.FaceOptions{
-		Size:    32,
+		Size:    12,
 		DPI:     72,
 		Hinting: font.HintingFull,
 	})
@@ -454,9 +543,15 @@ func main() {
 		Characters: []Character{
 			{
 				X:        100,
-				Y:        200,
+				Y:        50,
 				FrameNum: 0,
 				Sprite:   linkSprites["elderStandSouth"],
+				DialogueTree: map[string][]string{
+					"intro": {"This is the NPC interaction text wrapped in a text box. This is the second sentence.", "This is the second dialogue phrase after the first phrase."},
+				},
+				DialogueKey: "intro",
+				PhraseNum:   0,
+				RuneNum:     0,
 			},
 		},
 		Doodads: []Doodad{

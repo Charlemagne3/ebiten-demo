@@ -86,7 +86,19 @@
     {
         "frameLen": 1,
         "frameHeight": 42,
-        "frameWidth": 16,
-        "image": "dialogue_frame.png"
+        "frameWidth": 4,
+        "image": "dialogue_frame_left.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 42,
+        "frameWidth": 8,
+        "image": "dialogue_frame_center.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 42,
+        "frameWidth": 4,
+        "image": "dialogue_frame_right.png"
     }
 ]
