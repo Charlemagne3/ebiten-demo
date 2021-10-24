@@ -69,7 +69,7 @@ func CamelCase(s string) string {
 }
 
 type Collider interface {
-	Hitbox(x, y int, flat bool) image.Rectangle
+	Hitbox(x, y int) image.Rectangle
 }
 
 type InteractionTarget interface {
@@ -255,38 +255,29 @@ func IsLeastKeyPressDuration(key ebiten.Key) bool {
 		(key == ebiten.KeyRight || d < right || right == 0)
 }
 
-// Hitbox returns a player hitbox rectanle offset by x and y, and simulates perspective if flat is false
-func (p *Player) Hitbox(x, y int, flat bool) image.Rectangle {
+// Hitbox returns a player hitbox rectanle offset by x and y, and simulates perspective
+func (p *Player) Hitbox(x, y int) image.Rectangle {
 	// ebiten renders from the min vertex (top left)
 	// To simulate render from the center of "feet" of sprites, we tranlate up (negative Y) by the sprite height and left (negative X) by half the sprite width
 	// To simulate perspective, we also limit the hitbox to the bottom half of the sprite by translating the min point down (positive Y) by half the sprite height
 	// This results in a translating up (negative Y by half the sprite height)
-	offset := p.Sprite.FrameHeight
-	if !flat {
-		offset /= 2
-	}
+	offset := p.Sprite.FrameHeight / 2
 	return image.Rect(p.X+x-p.Sprite.FrameWidth/2, p.Y+y-offset, p.X+x+p.Sprite.FrameWidth/2, p.Y+y)
 }
 
-// Hitbox returns a character hitbox rectanle offset by x and y, and simulates perspective if flat is false
-func (c *Character) Hitbox(x, y int, flat bool) image.Rectangle {
+// Hitbox returns a character hitbox rectanle offset by x and y, and simulates perspective
+func (c *Character) Hitbox(x, y int) image.Rectangle {
 	// ebiten renders from the min vertex (top left)
 	// To simulate render from the center of "feet" of sprites, we tranlate up (negative Y) by the sprite height and left (negative X) by half the sprite width
 	// To simulate perspective, we also limit the hitbox to the bottom half of the sprite by translating the min point down (positive Y) by half the sprite height
 	// This results in a translating up (negative Y by half the sprite height)
-	offset := c.Sprite.FrameHeight
-	if !flat {
-		offset /= 2
-	}
+	offset := c.Sprite.FrameHeight / 2
 	return image.Rect(c.X+x-c.Sprite.FrameWidth/2, c.Y+y-offset, c.X+x+c.Sprite.FrameWidth/2, c.Y+y)
 }
 
-// Hitbox returns a doodad hitbox rectanle offset by x and y, and simulates perspective if flat is false
-func (d *Doodad) Hitbox(x, y int, flat bool) image.Rectangle {
+// Hitbox returns a doodad hitbox rectanle offset by x and y
+func (d *Doodad) Hitbox(x, y int) image.Rectangle {
 	offset := d.Sprite.FrameHeight
-	if !flat {
-		offset /= 2
-	}
 	return image.Rect(d.X+x-d.Sprite.FrameWidth/2, d.Y+y-offset, d.X+x+d.Sprite.FrameWidth/2, d.Y+y)
 }
 
@@ -310,8 +301,8 @@ func (g *Game) Update() error {
 		}
 	} else if !g.Player.Animation && inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
 		for _, c := range g.Characters {
-			playerRect := g.Player.Hitbox(0, 0, false)
-			characterRect := c.Hitbox(0, 0, false)
+			playerRect := g.Player.Hitbox(0, 0)
+			characterRect := c.Hitbox(0, 0)
 			// Check if a side of the player rect is touching the character rect and the midpoint of that side is touching the character rect
 			if AbsDiff(playerRect.Max.X, characterRect.Min.X) <= 1 && playerRect.Min.Y+(playerRect.Dy()/2) >= characterRect.Min.Y && playerRect.Min.Y+(playerRect.Dy()/2) <= characterRect.Max.Y {
 				g.InteractionTarget = &c
@@ -353,17 +344,17 @@ func (g *Game) Update() error {
 			g.Player.FrameNum = 0
 			g.Player.Sprite = g.Sprites["linkWalkWest"]
 		}
-		playerRect := g.Player.Hitbox(-1, 0, false)
+		playerRect := g.Player.Hitbox(-1, 0)
 		move := true
 		for _, v := range g.Doodads {
-			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, true))
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
 				move = false
 				break
 			}
 		}
 		for _, v := range g.Characters {
-			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, false))
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
 				move = false
 				break
@@ -381,17 +372,17 @@ func (g *Game) Update() error {
 			g.Player.FrameNum = 0
 			g.Player.Sprite = g.Sprites["linkWalkEast"]
 		}
-		playerRect := g.Player.Hitbox(1, 0, false)
+		playerRect := g.Player.Hitbox(1, 0)
 		move := true
 		for _, v := range g.Doodads {
-			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, true))
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
 				move = false
 				break
 			}
 		}
 		for _, v := range g.Characters {
-			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, false))
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
 				move = false
 				break
@@ -409,17 +400,17 @@ func (g *Game) Update() error {
 			g.Player.FrameNum = 0
 			g.Player.Sprite = g.Sprites["linkWalkNorth"]
 		}
-		playerRect := g.Player.Hitbox(0, -1, false)
+		playerRect := g.Player.Hitbox(0, -1)
 		move := true
 		for _, v := range g.Doodads {
-			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, true))
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
 				move = false
 				break
 			}
 		}
 		for _, v := range g.Characters {
-			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, false))
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
 				move = false
 				break
@@ -437,17 +428,17 @@ func (g *Game) Update() error {
 			g.Player.FrameNum = 0
 			g.Player.Sprite = g.Sprites["linkWalkSouth"]
 		}
-		playerRect := g.Player.Hitbox(0, 1, false)
+		playerRect := g.Player.Hitbox(0, 1)
 		move := true
 		for _, v := range g.Doodads {
-			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, true))
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
 				move = false
 				break
 			}
 		}
 		for _, v := range g.Characters {
-			isCollision := playerRect.Overlaps(v.Hitbox(0, 0, false))
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
 				move = false
 				break
@@ -535,8 +526,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			for w := 0; w < 320-leftWidth-rightWidth && i < len(dialogue); i++ {
 				render = append(render, dialogue[i])
 				join := strings.Join(render, " ")
+				// Calculate the rect size of the string
 				bound, _ := font.BoundString(g.Font, join)
 				w = (bound.Max.X - bound.Min.X).Ceil()
+				// If the rect overflows the screen, go back by one word
 				if w >= 320-leftWidth-rightWidth {
 					i--
 				}
