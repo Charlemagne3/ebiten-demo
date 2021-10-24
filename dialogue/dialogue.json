@@ -1,0 +1,30 @@
+{
+    "intro": [
+        {
+            "id": "elder_intro_0",
+            "phrase": "This is the NPC interaction text wrapped in a text box. This is the second sentence.",
+            "connections": ["elder_intro_1"]
+        },
+        {
+            "id": "elder_intro_1",
+            "phrase":  "This is the second dialogue phrase after the first phrase.",
+            "connections": ["elder_intro_question"]
+        },
+        {
+            "id": "elder_intro_question",
+            "phrase":  "Are you having fun?",
+            "connections": ["elder_intro_yes", "elder_intro_no"],
+            "options": [["yes", "elder_intro_yes"], ["no","elder_intro_no"]]
+        },
+        {
+            "id": "elder_intro_yes",
+            "phrase":  "You answered yes.",
+            "connections": []
+        },
+        {
+            "id": "elder_intro_no",
+            "phrase":  "You answered no.",
+            "connections": []
+        }
+    ]
+}

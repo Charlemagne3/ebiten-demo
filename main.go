@@ -19,6 +19,15 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/text"
 )
 
+func Contains(a []string, s string) bool {
+	for _, v := range a {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
 func Min(x, y int) int {
 	if x < y {
 		return x
@@ -33,16 +42,44 @@ func Max(x, y int) int {
 	return y
 }
 
+func AbsDiff(x, y int) int {
+	if x < y {
+		return y - x
+	}
+	return x - y
+}
+
+func CamelCase(s string) string {
+	var snek bool
+	var camel string
+	for i := 0; i < len(s); i++ {
+		char := string(s[i])
+		if char == "_" {
+			snek = true
+			continue
+		}
+		if snek {
+			snek = false
+			camel += strings.ToUpper(char)
+		} else {
+			camel += char
+		}
+	}
+	return camel
+}
+
 type Collider interface {
 	Hitbox(x, y int, flat bool) image.Rectangle
 }
 
 type InteractionTarget interface {
-	Dialogue() string  // The current dialogue to render
-	AdvanceRune()      // Advances to the next rune
-	AdvancePhrase()    // Advances to the next phrase
-	IsExhausted() bool // Returns true if the current dialogue tree is complete
-	Reset()            // Resets the dialogue tree after being exhausted
+	Dialogue() string    // The current dialogue to render
+	Options() [][]string // The options for the current dialogue, or empty
+	SelectOption(int)    // Selects a next or previous option
+	AdvanceRune()        // Advances to the next rune
+	AdvancePhrase()      // Advances to the next phrase
+	IsExhausted() bool   // Returns true if the current dialogue tree is complete
+	Reset()              // Resets the dialogue tree after being exhausted
 }
 
 // Game is an ebiten Game interface implemetation plus custom struct data
@@ -67,40 +104,81 @@ type Player struct {
 	FrameNum  int        // The current frame of the sprite for the player
 }
 
+type DialogueGraph struct {
+	Nodes   map[string]*DialogueNode
+	Edges   map[string][]string
+	NodeKey string // The current node of dialogue the player is on
+	RootKey string // The root node of the current dialogue tree
+}
+
+type DialogueNode struct {
+	Phrase    string     // The phrase of dialogue
+	Options   [][]string // The options on the node, or empty
+	RuneNum   int
+	OptionNum int // Which option is selected
+}
+
 // Character represents an npc character
 type Character struct {
-	X            int                 // The current X screen offset of the character
-	Y            int                 // The current Y screen offset of the character
-	Animation    bool                // Whether or not the character is in a special animation or the normal stand/walk cycle.
-	LastDir      ebiten.Key          // The last direction the character faced (never -1)
-	Sprite       Sprite              // The current sprite for the character
-	FrameNum     int                 // The current frame of the sprite for the character
-	DialogueTree map[string][]string // The dialogue the character has
-	DialogueKey  string
-	PhraseNum    int
-	RuneNum      int
+	X              int                       // The current X screen offset of the character
+	Y              int                       // The current Y screen offset of the character
+	Animation      bool                      // Whether or not the character is in a special animation or the normal stand/walk cycle.
+	LastDir        ebiten.Key                // The last direction the character faced (never -1)
+	Sprite         Sprite                    // The current sprite for the character
+	FrameNum       int                       // The current frame of the sprite for the character
+	DialogueGraphs map[string]*DialogueGraph // The dialogue graphs the character has
+	DialogueKey    string                    // The current dialogue graph the character has loaded
 }
 
 func (c *Character) Dialogue() string {
-	return c.DialogueTree[c.DialogueKey][c.PhraseNum][:c.RuneNum]
+	graph := c.DialogueGraphs[c.DialogueKey]
+	node := graph.Nodes[graph.NodeKey]
+	return node.Phrase[:node.RuneNum]
+}
+
+func (c *Character) Options() [][]string {
+	graph := c.DialogueGraphs[c.DialogueKey]
+	node := graph.Nodes[graph.NodeKey]
+	return node.Options
+}
+
+func (c *Character) SelectOption(dir int) {
+	graph := c.DialogueGraphs[c.DialogueKey]
+	node := graph.Nodes[graph.NodeKey]
+	node.OptionNum = Min(Max(node.OptionNum+dir, 0), len(node.Options)-1)
 }
 
 func (c *Character) AdvanceRune() {
-	c.RuneNum = Min(c.RuneNum+1, len(c.DialogueTree[c.DialogueKey][c.PhraseNum]))
+	graph := c.DialogueGraphs[c.DialogueKey]
+	node := graph.Nodes[graph.NodeKey]
+	node.RuneNum = Min(node.RuneNum+1, len(node.Phrase))
 }
 
 func (c *Character) AdvancePhrase() {
-	c.PhraseNum++
-	c.RuneNum = 0
+	graph := c.DialogueGraphs[c.DialogueKey]
+	connections := graph.Edges[graph.NodeKey]
+	node := graph.Nodes[graph.NodeKey]
+	if len(node.Options) == 0 {
+		graph.Nodes[graph.NodeKey].RuneNum = 0
+		graph.Nodes[graph.NodeKey].OptionNum = 0
+		graph.NodeKey = connections[0]
+	} else {
+		options := node.Options[node.OptionNum]
+		if Contains(connections, options[1]) {
+			graph.Nodes[graph.NodeKey].RuneNum = 0
+			graph.Nodes[graph.NodeKey].OptionNum = 0
+			graph.NodeKey = options[1]
+		}
+	}
 }
 
 func (c *Character) IsExhausted() bool {
-	return c.PhraseNum >= len(c.DialogueTree[c.DialogueKey])
+	graph := c.DialogueGraphs[c.DialogueKey]
+	return len(graph.Edges[graph.NodeKey]) == 0
 }
 
 func (c *Character) Reset() {
-	c.RuneNum = 0
-	c.PhraseNum = 0
+	c.DialogueGraphs[c.DialogueKey].NodeKey = c.DialogueGraphs[c.DialogueKey].RootKey
 }
 
 // Enemy represents an enemy
@@ -135,6 +213,14 @@ type SpriteJSON struct {
 	FrameHeight int    `json:"frameHeight"`
 	FrameLen    int    `json:"frameLen"`
 	Image       string `json:"image"`
+}
+
+// DialogueJSON represents the json to be read from the dialogue json file.
+type DialogueJSON struct {
+	ID          string     `json:"id"`
+	Phrase      string     `json:"phrase"`
+	Options     [][]string `json:"options"`
+	Connections []string   `json:"connections"`
 }
 
 // IsOtherDirectionJustReleased checks if one of the three cardinal directions other than the key passed in was just released
@@ -207,9 +293,43 @@ func (d *Doodad) Hitbox(x, y int, flat bool) image.Rectangle {
 func (g *Game) Update() error {
 
 	if g.InteractionTarget != nil {
+		// Render the next rune to scroll the text
 		g.InteractionTarget.AdvanceRune()
-		if inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
-			g.InteractionTarget.AdvancePhrase()
+		if inpututil.IsKeyJustReleased(ebiten.KeyLeft) {
+			g.InteractionTarget.SelectOption(-1)
+		} else if inpututil.IsKeyJustReleased(ebiten.KeyRight) {
+			g.InteractionTarget.SelectOption(1)
+		} else if inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
+			// If out of dialogue, end the interaction
+			if g.InteractionTarget.IsExhausted() {
+				g.InteractionTarget.Reset()
+				g.InteractionTarget = nil
+			} else {
+				g.InteractionTarget.AdvancePhrase()
+			}
+		}
+	} else if !g.Player.Animation && inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
+		for _, c := range g.Characters {
+			playerRect := g.Player.Hitbox(0, 0, false)
+			characterRect := c.Hitbox(0, 0, false)
+			// Check if a side of the player rect is touching the character rect and the midpoint of that side is touching the character rect
+			if AbsDiff(playerRect.Max.X, characterRect.Min.X) <= 1 && playerRect.Min.Y+(playerRect.Dy()/2) >= characterRect.Min.Y && playerRect.Min.Y+(playerRect.Dy()/2) <= characterRect.Max.Y {
+				g.InteractionTarget = &c
+				g.Player.FrameNum = 0
+				g.Player.Sprite = g.Sprites["linkStandEast"]
+			} else if AbsDiff(playerRect.Max.Y, characterRect.Min.Y) <= 1 && playerRect.Min.X+(playerRect.Dx()/2) >= characterRect.Min.X && playerRect.Min.X+(playerRect.Dx()/2) <= characterRect.Max.X {
+				g.InteractionTarget = &c
+				g.Player.FrameNum = 0
+				g.Player.Sprite = g.Sprites["linkStandSouth"]
+			} else if AbsDiff(playerRect.Min.X, characterRect.Max.X) <= 1 && playerRect.Min.Y+(playerRect.Dy()/2) >= characterRect.Min.Y && playerRect.Min.Y+(playerRect.Dy()/2) <= characterRect.Max.Y {
+				g.InteractionTarget = &c
+				g.Player.FrameNum = 0
+				g.Player.Sprite = g.Sprites["linkStandWest"]
+			} else if AbsDiff(playerRect.Min.Y, characterRect.Max.Y) <= 1 && playerRect.Min.X+(playerRect.Dx()/2) >= characterRect.Min.X && playerRect.Min.X+(playerRect.Dx()/2) <= characterRect.Max.X {
+				g.InteractionTarget = &c
+				g.Player.FrameNum = 0
+				g.Player.Sprite = g.Sprites["linkStandNorth"]
+			}
 		}
 	}
 
@@ -367,39 +487,6 @@ func (g *Game) Update() error {
 		}
 	}
 
-	// If starting an interaction
-	if g.InteractionTarget == nil && !g.Player.Animation && inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
-		for _, c := range g.Characters {
-			playerRect := g.Player.Hitbox(0, 0, false)
-			characterRect := c.Hitbox(0, 0, false)
-			if playerRect.Max.X-characterRect.Min.X <= 1 {
-				g.InteractionTarget = &c
-				g.Player.FrameNum = 0
-				g.Player.Sprite = g.Sprites["linkStandEast"]
-			}
-			if playerRect.Max.Y-characterRect.Min.Y <= 1 {
-				g.InteractionTarget = &c
-				g.Player.FrameNum = 0
-				g.Player.Sprite = g.Sprites["linkStandSouth"]
-			}
-			if characterRect.Max.X-playerRect.Min.X <= 1 {
-				g.InteractionTarget = &c
-				g.Player.FrameNum = 0
-				g.Player.Sprite = g.Sprites["linkStandWest"]
-			}
-			if characterRect.Max.Y-playerRect.Min.Y <= 1 {
-				g.InteractionTarget = &c
-				g.Player.FrameNum = 0
-				g.Player.Sprite = g.Sprites["linkStandNorth"]
-			}
-		}
-	}
-
-	if g.InteractionTarget != nil && g.InteractionTarget.IsExhausted() {
-		g.InteractionTarget.Reset()
-		g.InteractionTarget = nil
-	}
-
 	return nil
 }
 
@@ -444,6 +531,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		line := 1
 		for i := 0; i < len(dialogue); line++ {
 			var render []string
+			// Loop over words until they surpass the screen length, then back up by one word
 			for w := 0; w < 320-leftWidth-rightWidth && i < len(dialogue); i++ {
 				render = append(render, dialogue[i])
 				join := strings.Join(render, " ")
@@ -488,22 +576,7 @@ func main() {
 		}
 
 		// camelCase the filenames without the extension to make sprite keys
-		var snek bool
-		var k string
-		image := v.Image[:len(v.Image)-4]
-		for i := 0; i < len(image); i++ {
-			char := string(image[i])
-			if char == "_" {
-				snek = true
-				continue
-			}
-			if snek {
-				snek = false
-				k += strings.ToUpper(char)
-			} else {
-				k += char
-			}
-		}
+		k := CamelCase(v.Image[:len(v.Image)-4])
 
 		linkSprites[k] = Sprite{
 			FrameLen:    v.FrameLen,
@@ -514,6 +587,41 @@ func main() {
 	}
 
 	sprite := linkSprites["linkStandSouth"]
+
+	dialogues, err := os.ReadFile("./dialogue/dialogue.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var jsonDialogues map[string][]DialogueJSON
+	err = json.Unmarshal(dialogues, &jsonDialogues)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dialogueGraphs := map[string]*DialogueGraph{}
+	for k, v := range jsonDialogues {
+		graph := DialogueGraph{
+			Nodes: map[string]*DialogueNode{},
+			Edges: map[string][]string{},
+		}
+		for i := 0; i < len(v); i++ {
+			node := DialogueNode{
+				Phrase:    v[i].Phrase,
+				Options:   v[i].Options,
+				RuneNum:   0,
+				OptionNum: 0,
+			}
+			graph.Nodes[v[i].ID] = &node
+			graph.Edges[v[i].ID] = v[i].Connections
+			if i == 0 {
+				graph.RootKey = v[i].ID
+				graph.NodeKey = v[i].ID
+			}
+		}
+
+		dialogueGraphs[k] = &graph
+	}
 
 	f, err := opentype.Parse(goregular.TTF)
 	if err != nil {
@@ -542,16 +650,12 @@ func main() {
 		},
 		Characters: []Character{
 			{
-				X:        100,
-				Y:        50,
-				FrameNum: 0,
-				Sprite:   linkSprites["elderStandSouth"],
-				DialogueTree: map[string][]string{
-					"intro": {"This is the NPC interaction text wrapped in a text box. This is the second sentence.", "This is the second dialogue phrase after the first phrase."},
-				},
-				DialogueKey: "intro",
-				PhraseNum:   0,
-				RuneNum:     0,
+				X:              100,
+				Y:              50,
+				FrameNum:       0,
+				Sprite:         linkSprites["elderStandSouth"],
+				DialogueGraphs: dialogueGraphs,
+				DialogueKey:    "intro",
 			},
 		},
 		Doodads: []Doodad{
