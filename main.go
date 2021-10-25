@@ -76,10 +76,10 @@ type InteractionTarget interface {
 	Dialogue() string    // The current dialogue to render
 	Options() [][]string // The options for the current dialogue, or empty
 	SelectOption(int)    // Selects a next or previous option
+	SelectedOption() int // Returns the selected option
 	AdvanceRune()        // Advances to the next rune
 	AdvancePhrase()      // Advances to the next phrase
 	IsExhausted() bool   // Returns true if the current dialogue tree is complete
-	Reset()              // Resets the dialogue tree after being exhausted
 }
 
 // Game is an ebiten Game interface implemetation plus custom struct data
@@ -115,7 +115,8 @@ type DialogueNode struct {
 	Phrase    string     // The phrase of dialogue
 	Options   [][]string // The options on the node, or empty
 	RuneNum   int
-	OptionNum int // Which option is selected
+	OptionNum int  // Which option is selected
+	End       bool // Whether or not to end the interaction after this node is completed.
 }
 
 // Character represents an npc character
@@ -148,6 +149,12 @@ func (c *Character) SelectOption(dir int) {
 	node.OptionNum = Min(Max(node.OptionNum+dir, 0), len(node.Options)-1)
 }
 
+func (c *Character) SelectedOption() int {
+	graph := c.DialogueGraphs[c.DialogueKey]
+	node := graph.Nodes[graph.NodeKey]
+	return node.OptionNum
+}
+
 func (c *Character) AdvanceRune() {
 	graph := c.DialogueGraphs[c.DialogueKey]
 	node := graph.Nodes[graph.NodeKey]
@@ -158,11 +165,12 @@ func (c *Character) AdvancePhrase() {
 	graph := c.DialogueGraphs[c.DialogueKey]
 	connections := graph.Edges[graph.NodeKey]
 	node := graph.Nodes[graph.NodeKey]
-	if len(node.Options) == 0 {
+	// If the node has no options then there is only a single node to advance to
+	if len(node.Options) == 0 && len(connections) > 0 {
 		graph.Nodes[graph.NodeKey].RuneNum = 0
 		graph.Nodes[graph.NodeKey].OptionNum = 0
 		graph.NodeKey = connections[0]
-	} else {
+	} else if len(node.Options) > 0 {
 		options := node.Options[node.OptionNum]
 		if Contains(connections, options[1]) {
 			graph.Nodes[graph.NodeKey].RuneNum = 0
@@ -174,11 +182,7 @@ func (c *Character) AdvancePhrase() {
 
 func (c *Character) IsExhausted() bool {
 	graph := c.DialogueGraphs[c.DialogueKey]
-	return len(graph.Edges[graph.NodeKey]) == 0
-}
-
-func (c *Character) Reset() {
-	c.DialogueGraphs[c.DialogueKey].NodeKey = c.DialogueGraphs[c.DialogueKey].RootKey
+	return graph.Nodes[graph.NodeKey].End
 }
 
 // Enemy represents an enemy
@@ -221,6 +225,7 @@ type DialogueJSON struct {
 	Phrase      string     `json:"phrase"`
 	Options     [][]string `json:"options"`
 	Connections []string   `json:"connections"`
+	End         bool       `json:"end"`
 }
 
 // IsOtherDirectionJustReleased checks if one of the three cardinal directions other than the key passed in was just released
@@ -255,7 +260,7 @@ func IsLeastKeyPressDuration(key ebiten.Key) bool {
 		(key == ebiten.KeyRight || d < right || right == 0)
 }
 
-// Hitbox returns a player hitbox rectanle offset by x and y, and simulates perspective
+// Hitbox returns a player hitbox rectangle offset by x and y, and simulates perspective
 func (p *Player) Hitbox(x, y int) image.Rectangle {
 	// ebiten renders from the min vertex (top left)
 	// To simulate render from the center of "feet" of sprites, we tranlate up (negative Y) by the sprite height and left (negative X) by half the sprite width
@@ -265,7 +270,7 @@ func (p *Player) Hitbox(x, y int) image.Rectangle {
 	return image.Rect(p.X+x-p.Sprite.FrameWidth/2, p.Y+y-offset, p.X+x+p.Sprite.FrameWidth/2, p.Y+y)
 }
 
-// Hitbox returns a character hitbox rectanle offset by x and y, and simulates perspective
+// Hitbox returns a character hitbox rectangle offset by x and y, and simulates perspective
 func (c *Character) Hitbox(x, y int) image.Rectangle {
 	// ebiten renders from the min vertex (top left)
 	// To simulate render from the center of "feet" of sprites, we tranlate up (negative Y) by the sprite height and left (negative X) by half the sprite width
@@ -275,7 +280,7 @@ func (c *Character) Hitbox(x, y int) image.Rectangle {
 	return image.Rect(c.X+x-c.Sprite.FrameWidth/2, c.Y+y-offset, c.X+x+c.Sprite.FrameWidth/2, c.Y+y)
 }
 
-// Hitbox returns a doodad hitbox rectanle offset by x and y
+// Hitbox returns a doodad hitbox rectangle offset by x and y
 func (d *Doodad) Hitbox(x, y int) image.Rectangle {
 	offset := d.Sprite.FrameHeight
 	return image.Rect(d.X+x-d.Sprite.FrameWidth/2, d.Y+y-offset, d.X+x+d.Sprite.FrameWidth/2, d.Y+y)
@@ -293,7 +298,7 @@ func (g *Game) Update() error {
 		} else if inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
 			// If out of dialogue, end the interaction
 			if g.InteractionTarget.IsExhausted() {
-				g.InteractionTarget.Reset()
+				g.InteractionTarget.AdvancePhrase()
 				g.InteractionTarget = nil
 			} else {
 				g.InteractionTarget.AdvancePhrase()
@@ -539,6 +544,17 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			}
 			text.Draw(screen, strings.Join(render, " "), g.Font, 8, line*18, color.White)
 		}
+		options := g.InteractionTarget.Options()
+		if len(options) > 0 {
+			var o []string
+			for i := 0; i < len(options); i++ {
+				o = append(o, options[i][0])
+			}
+			text.Draw(screen, strings.Join(o, " "), g.Font, 8, line*18, color.White)
+			g.Options.GeoM.Reset()
+			g.Options.GeoM.Translate(float64(8+18*g.InteractionTarget.SelectedOption()), float64(line*12))
+			screen.DrawImage(g.Sprites["selectBox"].Image, g.Options)
+		}
 	}
 }
 
@@ -604,6 +620,7 @@ func main() {
 				Options:   v[i].Options,
 				RuneNum:   0,
 				OptionNum: 0,
+				End:       v[i].End,
 			}
 			graph.Nodes[v[i].ID] = &node
 			graph.Edges[v[i].ID] = v[i].Connections
@@ -648,7 +665,7 @@ func main() {
 				FrameNum:       0,
 				Sprite:         linkSprites["elderStandSouth"],
 				DialogueGraphs: dialogueGraphs,
-				DialogueKey:    "intro",
+				DialogueKey:    "elder",
 			},
 		},
 		Doodads: []Doodad{

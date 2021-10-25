@@ -1,5 +1,5 @@
 {
-    "intro": [
+    "elder": [
         {
             "id": "elder_intro_0",
             "phrase": "This is the NPC interaction text wrapped in a text box. This is the second sentence.",
@@ -19,12 +19,28 @@
         {
             "id": "elder_intro_yes",
             "phrase":  "You answered yes.",
-            "connections": []
+            "connections": ["elder_fun"],
+            "end": true
         },
         {
             "id": "elder_intro_no",
             "phrase":  "You answered no.",
-            "connections": []
+            "connections": ["elder_no_fun"],
+            "end": true
+        },
+        {
+            "id": "elder_fun",
+            "phrase": "Glad to see you are having fun. Are you still having fun?",
+            "options": [["yes", "elder_fun"], ["no","elder_no_fun"]],
+            "connections": ["elder_fun", "elder_no_fun"],
+            "end": true
+        },
+        {
+            "id": "elder_no_fun",
+            "phrase":  "Sorry to see you are not having fun. Are you having fun yet?",
+            "options": [["yes", "elder_fun"], ["no","elder_no_fun"]],
+            "connections": ["elder_fun", "elder_no_fun"],
+            "end": true
         }
     ]
 }

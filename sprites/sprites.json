@@ -100,5 +100,11 @@
         "frameHeight": 42,
         "frameWidth": 4,
         "image": "dialogue_frame_right.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 22,
+        "frameWidth": 22,
+        "image": "select_box.png"
     }
 ]
