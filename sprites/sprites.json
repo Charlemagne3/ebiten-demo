@@ -24,54 +24,63 @@
         "image": "link_stand_east.png"
     },
     {
+        "frameDuration": 6,
         "frameLen": 8,
         "frameHeight": 23,
         "frameWidth": 16,
         "image": "link_walk_south.png"
     },
     {
+        "frameDuration": 6,
         "frameLen": 8,
         "frameHeight": 23,
         "frameWidth": 16,
         "image": "link_walk_north.png"
     },
     {
+        "frameDuration": 6,
         "frameLen": 8,
         "frameHeight": 23,
         "frameWidth": 18,
         "image": "link_walk_west.png"
     },
     {
+        "frameDuration": 6,
         "frameLen": 8,
         "frameHeight": 23,
         "frameWidth": 18,
         "image": "link_walk_east.png"
     },
     {
+        "frameDuration": 6,
         "frameLen": 8,
         "frameHeight": 24,
         "frameWidth": 16,
         "image": "link_attack_south.png"
     },
     {
+        "frameDuration": 6,
         "frameLen": 8,
         "frameHeight": 27,
         "frameWidth": 16,
         "image": "link_attack_north.png"
     },
     {
+        "frameDuration": 6,
         "frameLen": 8,
         "frameHeight": 23,
         "frameWidth": 24,
         "image": "link_attack_west.png"
     },
     {
+        "frameDuration": 6,
         "frameLen": 8,
         "frameHeight": 23,
         "frameWidth": 24,
         "image": "link_attack_east.png"
     },
     {
+        "frameDuration": 30,
         "frameLen": 2,
         "frameHeight": 21,
         "frameWidth": 22,
@@ -79,9 +88,117 @@
     },
     {
         "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_stand_south.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_stand_north.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_stand_west.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_stand_east.png"
+    },
+    {
+        "frameDuration": 1,
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_walk_south.png"
+    },
+    {
+        "frameDuration": 1,
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_walk_north.png"
+    },
+    {
+        "frameDuration": 1,
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_walk_west.png"
+    },
+    {
+        "frameDuration": 1,
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_walk_east.png"
+    },
+    {
+        "frameDuration": 60,
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_attack_south.png"
+    },
+    {
+        "frameDuration": 60,
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_attack_north.png"
+    },
+    {
+        "frameDuration": 60,
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_attack_west.png"
+    },
+    {
+        "frameDuration": 60,
+        "frameLen": 1,
+        "frameHeight": 24,
+        "frameWidth": 16,
+        "image": "skeleton_wizard_attack_east.png"
+    },
+    {
+        "frameLen": 1,
         "frameHeight": 32,
         "frameWidth": 32,
         "image": "stump.png"
+    },
+    {
+        "frameDuration": 1,
+        "frameLen": 1,
+        "frameHeight": 16,
+        "frameWidth": 7,
+        "image": "fireball_south.png"
+    },
+    {
+        "frameDuration": 1,
+        "frameLen": 1,
+        "frameHeight": 16,
+        "frameWidth": 7,
+        "image": "fireball_north.png"
+    },
+    {
+        "frameDuration": 1,
+        "frameLen": 1,
+        "frameHeight": 7,
+        "frameWidth": 16,
+        "image": "fireball_west.png"
+    },
+    {
+        "frameDuration": 1,
+        "frameLen": 1,
+        "frameHeight": 7,
+        "frameWidth": 16,
+        "image": "fireball_east.png"
     },
     {
         "frameLen": 1,

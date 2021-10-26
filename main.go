@@ -87,6 +87,7 @@ type Game struct {
 	Player            Player
 	Characters        []Character
 	Enemies           []Enemy
+	Projectiles       []Projectile
 	Doodads           []Doodad
 	Sprites           map[string]Sprite
 	Font              font.Face
@@ -102,6 +103,8 @@ type Player struct {
 	LastDir   ebiten.Key // The last direction the player faced (never -1)
 	Sprite    Sprite     // The current sprite for the player
 	FrameNum  int        // The current frame of the sprite for the player
+	FrameDur  int        // The duration of the current frame of the sprite for the player
+	Health    int        // How much health the player has
 }
 
 type DialogueGraph struct {
@@ -193,6 +196,16 @@ type Enemy struct {
 	LastDir   ebiten.Key // The last direction the enemy faced (never -1)
 	Sprite    Sprite     // The current sprite for the enemy
 	FrameNum  int        // The current frame of the sprite for the enemy
+	Behavior  Behavior   // The active behavior of the enemy
+}
+
+// Projectile represents a projectile
+type Projectile struct {
+	X        int        // The current X screen offset of the projectile
+	Y        int        // The current Y screen offset of the projectile
+	Sprite   Sprite     // The current sprite for the projectile
+	FrameNum int        // The current frame of the sprite for the projectile
+	Dir      ebiten.Key // The direction the projection is travelling
 }
 
 // Doodad represents a static environmental item
@@ -208,14 +221,16 @@ type Sprite struct {
 	FrameWidth  int
 	FrameHeight int
 	FrameLen    int // How many frames are in the sprite
+	FrameDur    int // How many render frames to display a single frame of the sprite
 	Image       *ebiten.Image
 }
 
 // SpriteJSON represents the json to be read from the sprite json file.
 type SpriteJSON struct {
-	FrameWidth  int    `json:"frameWidth"`
-	FrameHeight int    `json:"frameHeight"`
+	FrameDur    int    `json:"frameDuration"`
 	FrameLen    int    `json:"frameLen"`
+	FrameHeight int    `json:"frameHeight"`
+	FrameWidth  int    `json:"frameWidth"`
 	Image       string `json:"image"`
 }
 
@@ -229,7 +244,7 @@ type DialogueJSON struct {
 }
 
 // IsOtherDirectionJustReleased checks if one of the three cardinal directions other than the key passed in was just released
-// This is used to reset the walk cycel animation for a new direction
+// This is used to reset the walk cycle animation for a new direction
 func IsOtherDirectionJustReleased(key ebiten.Key) bool {
 	switch key {
 	case ebiten.KeyLeft:
@@ -280,6 +295,16 @@ func (c *Character) Hitbox(x, y int) image.Rectangle {
 	return image.Rect(c.X+x-c.Sprite.FrameWidth/2, c.Y+y-offset, c.X+x+c.Sprite.FrameWidth/2, c.Y+y)
 }
 
+// Hitbox returns a character hitbox rectangle offset by x and y, and simulates perspective
+func (e *Enemy) Hitbox(x, y int) image.Rectangle {
+	// ebiten renders from the min vertex (top left)
+	// To simulate render from the center of "feet" of sprites, we tranlate up (negative Y) by the sprite height and left (negative X) by half the sprite width
+	// To simulate perspective, we also limit the hitbox to the bottom half of the sprite by translating the min point down (positive Y) by half the sprite height
+	// This results in a translating up (negative Y by half the sprite height)
+	offset := e.Sprite.FrameHeight / 2
+	return image.Rect(e.X+x-e.Sprite.FrameWidth/2, e.Y+y-offset, e.X+x+e.Sprite.FrameWidth/2, e.Y+y)
+}
+
 // Hitbox returns a doodad hitbox rectangle offset by x and y
 func (d *Doodad) Hitbox(x, y int) image.Rectangle {
 	offset := d.Sprite.FrameHeight
@@ -312,18 +337,22 @@ func (g *Game) Update() error {
 			if AbsDiff(playerRect.Max.X, characterRect.Min.X) <= 1 && playerRect.Min.Y+(playerRect.Dy()/2) >= characterRect.Min.Y && playerRect.Min.Y+(playerRect.Dy()/2) <= characterRect.Max.Y {
 				g.InteractionTarget = &c
 				g.Player.FrameNum = 0
+				g.Player.FrameDur = 0
 				g.Player.Sprite = g.Sprites["linkStandEast"]
 			} else if AbsDiff(playerRect.Max.Y, characterRect.Min.Y) <= 1 && playerRect.Min.X+(playerRect.Dx()/2) >= characterRect.Min.X && playerRect.Min.X+(playerRect.Dx()/2) <= characterRect.Max.X {
 				g.InteractionTarget = &c
 				g.Player.FrameNum = 0
+				g.Player.FrameDur = 0
 				g.Player.Sprite = g.Sprites["linkStandSouth"]
 			} else if AbsDiff(playerRect.Min.X, characterRect.Max.X) <= 1 && playerRect.Min.Y+(playerRect.Dy()/2) >= characterRect.Min.Y && playerRect.Min.Y+(playerRect.Dy()/2) <= characterRect.Max.Y {
 				g.InteractionTarget = &c
 				g.Player.FrameNum = 0
+				g.Player.FrameDur = 0
 				g.Player.Sprite = g.Sprites["linkStandWest"]
 			} else if AbsDiff(playerRect.Min.Y, characterRect.Max.Y) <= 1 && playerRect.Min.X+(playerRect.Dx()/2) >= characterRect.Min.X && playerRect.Min.X+(playerRect.Dx()/2) <= characterRect.Max.X {
 				g.InteractionTarget = &c
 				g.Player.FrameNum = 0
+				g.Player.FrameDur = 0
 				g.Player.Sprite = g.Sprites["linkStandNorth"]
 			}
 		}
@@ -332,25 +361,41 @@ func (g *Game) Update() error {
 	animEnd := false
 
 	if g.Player.Sprite.FrameLen > 1 {
-		g.Player.FrameNum++
-		// FrameNum is zero indexed and FrameLen is a natural number, so subtract 1 for the mod operation
-		g.Player.FrameNum = g.Player.FrameNum % (g.Player.Sprite.FrameLen - 1)
-		// End the animation if the last render was the last frame
-		if g.Player.Animation && g.Player.FrameNum == 0 {
-			g.Player.Animation = false
-			animEnd = true
+		g.Player.FrameDur++
+		// Use >= because the 0 frame counts as one
+		if g.Player.FrameDur >= g.Player.Sprite.FrameDur {
+			g.Player.FrameDur = 0
+			g.Player.FrameNum++
+			// FrameNum is zero indexed and FrameLen is a natural number, so subtract 1 for the mod operation
+			g.Player.FrameNum = g.Player.FrameNum % (g.Player.Sprite.FrameLen - 1)
+			// End the animation if the last render was the last frame
+			if g.Player.Animation && g.Player.FrameNum == 0 {
+				g.Player.Animation = false
+				animEnd = true
+			}
 		}
 	}
+
+	var enemyCollision *Enemy
 
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
 		// Start the walk left animation if the player just pressed left or if an animation ended and the player was already moving left
 		if inpututil.IsKeyJustPressed(ebiten.KeyLeft) || (IsOtherDirectionJustReleased(ebiten.KeyLeft) && IsLeastKeyPressDuration(ebiten.KeyLeft)) || animEnd {
 			g.Player.LastDir = ebiten.KeyLeft
 			g.Player.FrameNum = 0
+			g.Player.FrameDur = 0
 			g.Player.Sprite = g.Sprites["linkWalkWest"]
 		}
 		playerRect := g.Player.Hitbox(-1, 0)
 		move := true
+		for _, v := range g.Enemies {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
+			if isCollision {
+				move = false
+				enemyCollision = &v
+				break
+			}
+		}
 		for _, v := range g.Doodads {
 			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
@@ -375,10 +420,19 @@ func (g *Game) Update() error {
 		if inpututil.IsKeyJustPressed(ebiten.KeyRight) || (IsOtherDirectionJustReleased(ebiten.KeyRight) && IsLeastKeyPressDuration(ebiten.KeyRight)) || animEnd {
 			g.Player.LastDir = ebiten.KeyRight
 			g.Player.FrameNum = 0
+			g.Player.FrameDur = 0
 			g.Player.Sprite = g.Sprites["linkWalkEast"]
 		}
 		playerRect := g.Player.Hitbox(1, 0)
 		move := true
+		for _, v := range g.Enemies {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
+			if isCollision {
+				move = false
+				enemyCollision = &v
+				break
+			}
+		}
 		for _, v := range g.Doodads {
 			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
@@ -403,10 +457,19 @@ func (g *Game) Update() error {
 		if inpututil.IsKeyJustPressed(ebiten.KeyUp) || (IsOtherDirectionJustReleased(ebiten.KeyUp) && IsLeastKeyPressDuration(ebiten.KeyUp)) || animEnd {
 			g.Player.LastDir = ebiten.KeyUp
 			g.Player.FrameNum = 0
+			g.Player.FrameDur = 0
 			g.Player.Sprite = g.Sprites["linkWalkNorth"]
 		}
 		playerRect := g.Player.Hitbox(0, -1)
 		move := true
+		for _, v := range g.Enemies {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
+			if isCollision {
+				move = false
+				enemyCollision = &v
+				break
+			}
+		}
 		for _, v := range g.Doodads {
 			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
@@ -431,10 +494,19 @@ func (g *Game) Update() error {
 		if inpututil.IsKeyJustPressed(ebiten.KeyDown) || (IsOtherDirectionJustReleased(ebiten.KeyDown) && IsLeastKeyPressDuration(ebiten.KeyDown)) || animEnd {
 			g.Player.LastDir = ebiten.KeyDown
 			g.Player.FrameNum = 0
+			g.Player.FrameDur = 0
 			g.Player.Sprite = g.Sprites["linkWalkSouth"]
 		}
 		playerRect := g.Player.Hitbox(0, 1)
 		move := true
+		for _, v := range g.Enemies {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
+			if isCollision {
+				move = false
+				enemyCollision = &v
+				break
+			}
+		}
 		for _, v := range g.Doodads {
 			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
@@ -457,6 +529,7 @@ func (g *Game) Update() error {
 	// If no direction is pressed and the player is not in an animation, select a standing sprite based on the last direction the player moved
 	if !ebiten.IsKeyPressed(ebiten.KeyLeft) && !ebiten.IsKeyPressed(ebiten.KeyRight) && !ebiten.IsKeyPressed(ebiten.KeyUp) && !ebiten.IsKeyPressed(ebiten.KeyDown) && !g.Player.Animation {
 		g.Player.FrameNum = 0
+		g.Player.FrameDur = 0
 		if g.Player.LastDir == ebiten.KeyLeft {
 			g.Player.Sprite = g.Sprites["linkStandWest"]
 		} else if g.Player.LastDir == ebiten.KeyRight {
@@ -472,6 +545,7 @@ func (g *Game) Update() error {
 	if !g.Player.Animation && ebiten.IsKeyPressed(ebiten.KeySpace) {
 		g.Player.Animation = true
 		g.Player.FrameNum = 0
+		g.Player.FrameDur = 0
 		if g.Player.LastDir == ebiten.KeyLeft {
 			g.Player.Sprite = g.Sprites["linkAttackWest"]
 		} else if g.Player.LastDir == ebiten.KeyRight {
@@ -481,6 +555,26 @@ func (g *Game) Update() error {
 		} else if g.Player.LastDir == ebiten.KeyDown {
 			g.Player.Sprite = g.Sprites["linkAttackSouth"]
 		}
+	}
+
+	for i := 0; i < len(g.Projectiles); i++ {
+		if g.Projectiles[i].Dir == ebiten.KeyLeft {
+			g.Projectiles[i].X--
+		} else if g.Projectiles[i].Dir == ebiten.KeyRight {
+			g.Projectiles[i].X++
+		} else if g.Projectiles[i].Dir == ebiten.KeyUp {
+			g.Projectiles[i].Y--
+		} else if g.Projectiles[i].Dir == ebiten.KeyDown {
+			g.Projectiles[i].Y++
+		}
+	}
+
+	for i := 0; i < len(g.Enemies); i++ {
+		AdvanceBehavior(g, &g.Enemies[i])
+	}
+
+	if enemyCollision != nil {
+		g.Player.Health--
 	}
 
 	return nil
@@ -493,12 +587,24 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		screen.DrawImage(d.Sprite.Image, g.Options)
 	}
 
+	for _, e := range g.Enemies {
+		g.Options.GeoM.Reset()
+		g.Options.GeoM.Translate(float64(e.X-e.Sprite.FrameWidth/2), float64(e.Y-e.Sprite.FrameHeight))
+		screen.DrawImage(e.Sprite.Image, g.Options)
+	}
+
 	for _, c := range g.Characters {
 		g.Options.GeoM.Reset()
 		// ebiten renders from the min vertex (top left). Offset by the frameheight and half the framewidth to emulate rendering from the "feet" of the sprite
 		g.Options.GeoM.Translate(float64(c.X-c.Sprite.FrameWidth/2), float64(c.Y-c.Sprite.FrameHeight))
 		// sub-rect is the width of a frame times the frame number, plus the frame number for the 1-pixel buffer between frames
 		screen.DrawImage(c.Sprite.Image.SubImage(image.Rect(c.Sprite.FrameWidth*c.FrameNum+c.FrameNum, 0, c.Sprite.FrameWidth*c.FrameNum+c.FrameNum+c.Sprite.FrameWidth, c.Sprite.FrameHeight)).(*ebiten.Image), g.Options)
+	}
+
+	for _, p := range g.Projectiles {
+		g.Options.GeoM.Reset()
+		g.Options.GeoM.Translate(float64(p.X-p.Sprite.FrameWidth/2), float64(p.Y-p.Sprite.FrameHeight))
+		screen.DrawImage(p.Sprite.Image, g.Options)
 	}
 
 	g.Options.GeoM.Reset()
@@ -588,6 +694,7 @@ func main() {
 		k := CamelCase(v.Image[:len(v.Image)-4])
 
 		linkSprites[k] = Sprite{
+			FrameDur:    v.FrameDur,
 			FrameLen:    v.FrameLen,
 			FrameHeight: v.FrameHeight,
 			FrameWidth:  v.FrameWidth,
@@ -657,6 +764,7 @@ func main() {
 			Animation: false,
 			FrameNum:  0,
 			Sprite:    sprite,
+			Health:    100,
 		},
 		Characters: []Character{
 			{
@@ -666,6 +774,17 @@ func main() {
 				Sprite:         linkSprites["elderStandSouth"],
 				DialogueGraphs: dialogueGraphs,
 				DialogueKey:    "elder",
+			},
+		},
+		Enemies: []Enemy{
+			{
+				X:        200,
+				Y:        100,
+				FrameNum: 0,
+				Sprite:   linkSprites["skeletonWizardStandSouth"],
+				Behavior: Behavior{
+					Pause: 60,
+				},
 			},
 		},
 		Doodads: []Doodad{
