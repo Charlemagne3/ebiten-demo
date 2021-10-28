@@ -1,6 +1,8 @@
 package main
 
-import "github.com/hajimehoshi/ebiten/v2"
+import (
+	"github.com/hajimehoshi/ebiten/v2"
+)
 
 var AttackCommands = []string{"attack_west", "attack_east", "attack_north", "attack_south"}
 
@@ -20,72 +22,158 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 	}
 	playerRect := g.Player.Hitbox(0, 0)
 	enemyRect := e.Hitbox(0, 0)
-	if enemyRect.Min.X == playerRect.Min.X {
-		if enemyRect.Min.Y < playerRect.Min.Y {
+	playerX := playerRect.Min.X + playerRect.Dx()/2
+	enemyX := enemyRect.Min.X + enemyRect.Dx()/2
+	if enemyX == playerX {
+		if enemyRect.Max.Y < playerRect.Max.Y {
 			e.Behavior.Command = "attack_south"
 			e.Sprite = g.Sprites["skeletonWizardAttackSouth"]
 			g.Projectiles = append(g.Projectiles, Projectile{
-				X:        e.X,
-				Y:        e.Y,
+				X:        enemyX,
+				Y:        enemyRect.Max.Y,
 				Sprite:   g.Sprites["fireballSouth"],
 				FrameNum: 0,
+				Speed:    3,
 				Dir:      ebiten.KeyDown,
 			})
-		} else if enemyRect.Min.Y > playerRect.Min.Y {
+		} else if enemyRect.Max.Y > playerRect.Max.Y {
 			e.Behavior.Command = "attack_north"
 			e.Sprite = g.Sprites["skeletonWizardAttackNorth"]
 			g.Projectiles = append(g.Projectiles, Projectile{
-				X:        e.X,
-				Y:        e.Y,
+				X:        enemyX,
+				Y:        enemyRect.Min.Y,
 				Sprite:   g.Sprites["fireballNorth"],
 				FrameNum: 0,
+				Speed:    3,
 				Dir:      ebiten.KeyUp,
 			})
 		}
-	} else if enemyRect.Min.Y == playerRect.Min.Y {
-		if enemyRect.Min.X < playerRect.Min.X {
+	} else if enemyRect.Max.Y == playerRect.Max.Y {
+		if enemyRect.Max.X < playerRect.Max.X {
 			e.Behavior.Command = "attack_east"
 			e.Sprite = g.Sprites["skeletonWizardAttackEast"]
 			g.Projectiles = append(g.Projectiles, Projectile{
-				X:        e.X,
-				Y:        e.Y,
+				X:        enemyRect.Max.X,
+				Y:        enemyRect.Max.Y,
 				Sprite:   g.Sprites["fireballEast"],
 				FrameNum: 0,
+				Speed:    3,
 				Dir:      ebiten.KeyRight,
 			})
-		} else if enemyRect.Min.X > playerRect.Min.X {
+		} else if enemyRect.Max.X > playerRect.Max.X {
 			e.Behavior.Command = "attack_west"
 			e.Sprite = g.Sprites["skeletonWizardAttackWest"]
 			g.Projectiles = append(g.Projectiles, Projectile{
-				X:        e.X,
-				Y:        e.Y,
+				X:        enemyRect.Min.X,
+				Y:        enemyRect.Max.Y,
 				Sprite:   g.Sprites["fireballWest"],
 				FrameNum: 0,
+				Speed:    3,
 				Dir:      ebiten.KeyLeft,
 			})
 		}
 	} else {
-		xDiff := AbsDiff(enemyRect.Min.X, playerRect.Min.X)
-		yDiff := AbsDiff(enemyRect.Min.Y, playerRect.Min.Y)
+		xDiff := AbsDiff(enemyX, playerX)
+		yDiff := AbsDiff(enemyRect.Max.Y, playerRect.Max.Y)
 		if xDiff < yDiff {
-			if enemyRect.Min.X < playerRect.Min.X {
-				e.Behavior.Command = "walk_east"
-				e.Sprite = g.Sprites["skeletonWizardWalkEast"]
-				e.X++
+			if enemyX < playerX {
+				move := true
+				enemyRect := e.Hitbox(1, 0)
+				for _, v := range g.Enemies {
+					isCollision := *e != v && enemyRect.Overlaps(v.Hitbox(0, 0))
+					if isCollision {
+						move = false
+						break
+					}
+				}
+				if move {
+					for _, v := range g.Doodads {
+						isCollision := enemyRect.Overlaps(v.Hitbox(0, 0))
+						if isCollision {
+							move = false
+							break
+						}
+					}
+				}
+				if move {
+					e.Behavior.Command = "walk_east"
+					e.Sprite = g.Sprites["skeletonWizardWalkEast"]
+					e.X++
+				}
 			} else {
-				e.Behavior.Command = "walk_west"
-				e.Sprite = g.Sprites["skeletonWizardWalkWest"]
-				e.X--
+				move := true
+				enemyRect := e.Hitbox(-1, 0)
+				for _, v := range g.Enemies {
+					isCollision := *e != v && enemyRect.Overlaps(v.Hitbox(0, 0))
+					if isCollision {
+						move = false
+						break
+					}
+				}
+				if move {
+					for _, v := range g.Doodads {
+						isCollision := enemyRect.Overlaps(v.Hitbox(0, 0))
+						if isCollision {
+							move = false
+							break
+						}
+					}
+				}
+				if move {
+					e.Behavior.Command = "walk_west"
+					e.Sprite = g.Sprites["skeletonWizardWalkWest"]
+					e.X--
+				}
 			}
 		} else {
-			if enemyRect.Min.Y < playerRect.Min.Y {
-				e.Behavior.Command = "walk_south"
-				e.Sprite = g.Sprites["skeletonWizardWalkSouth"]
-				e.Y++
+			if enemyRect.Max.Y < playerRect.Max.Y {
+				move := true
+				enemyRect := e.Hitbox(0, 1)
+				for _, v := range g.Enemies {
+					isCollision := *e != v && enemyRect.Overlaps(v.Hitbox(0, 0))
+					if isCollision {
+						move = false
+						break
+					}
+				}
+				if move {
+					for _, v := range g.Doodads {
+						isCollision := enemyRect.Overlaps(v.Hitbox(0, 0))
+						if isCollision {
+							move = false
+							break
+						}
+					}
+				}
+				if move {
+					e.Behavior.Command = "walk_south"
+					e.Sprite = g.Sprites["skeletonWizardWalkSouth"]
+					e.Y++
+				}
 			} else {
-				e.Behavior.Command = "walk_north"
-				e.Sprite = g.Sprites["skeletonWizardWalkNorth"]
-				e.Y--
+				move := true
+				enemyRect := e.Hitbox(0, -1)
+				for _, v := range g.Enemies {
+					isCollision := *e != v && enemyRect.Overlaps(v.Hitbox(0, 0))
+					if isCollision {
+						move = false
+						break
+					}
+				}
+				if move {
+					for _, v := range g.Doodads {
+						isCollision := enemyRect.Overlaps(v.Hitbox(0, 0))
+						if isCollision {
+							move = false
+							break
+						}
+					}
+				}
+				if move {
+					e.Behavior.Command = "walk_north"
+					e.Sprite = g.Sprites["skeletonWizardWalkNorth"]
+					e.Y--
+				}
 			}
 		}
 	}
