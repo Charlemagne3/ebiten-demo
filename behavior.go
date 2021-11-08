@@ -87,6 +87,15 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 					}
 				}
 				if move {
+					for _, v := range g.Tiles {
+						isCollision := enemyRect.Overlaps(v.Hitbox(0, 0))
+						if isCollision {
+							move = false
+							break
+						}
+					}
+				}
+				if move {
 					for _, v := range g.Doodads {
 						isCollision := enemyRect.Overlaps(v.Hitbox(0, 0))
 						if isCollision {
@@ -108,6 +117,15 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 					if isCollision {
 						move = false
 						break
+					}
+				}
+				if move {
+					for _, v := range g.Tiles {
+						isCollision := enemyRect.Overlaps(v.Hitbox(0, 0))
+						if isCollision {
+							move = false
+							break
+						}
 					}
 				}
 				if move {
@@ -137,6 +155,15 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 					}
 				}
 				if move {
+					for _, v := range g.Tiles {
+						isCollision := enemyRect.Overlaps(v.Hitbox(0, 0))
+						if isCollision {
+							move = false
+							break
+						}
+					}
+				}
+				if move {
 					for _, v := range g.Doodads {
 						isCollision := enemyRect.Overlaps(v.Hitbox(0, 0))
 						if isCollision {
@@ -158,6 +185,15 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 					if isCollision {
 						move = false
 						break
+					}
+				}
+				if move {
+					for _, v := range g.Tiles {
+						isCollision := enemyRect.Overlaps(v.Hitbox(0, 0))
+						if isCollision {
+							move = false
+							break
+						}
 					}
 				}
 				if move {

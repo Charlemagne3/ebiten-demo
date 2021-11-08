@@ -90,6 +90,13 @@ func UpdatePlayer(g *Game) {
 				break
 			}
 		}
+		for _, v := range g.Tiles {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
+			if isCollision {
+				move = false
+				break
+			}
+		}
 		for _, v := range g.Doodads {
 			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
@@ -124,6 +131,13 @@ func UpdatePlayer(g *Game) {
 			if isCollision {
 				move = false
 				g.EnemyCollision = &v
+				break
+			}
+		}
+		for _, v := range g.Tiles {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
+			if isCollision {
+				move = false
 				break
 			}
 		}
@@ -164,6 +178,13 @@ func UpdatePlayer(g *Game) {
 				break
 			}
 		}
+		for _, v := range g.Tiles {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
+			if isCollision {
+				move = false
+				break
+			}
+		}
 		for _, v := range g.Doodads {
 			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
 			if isCollision {
@@ -198,6 +219,13 @@ func UpdatePlayer(g *Game) {
 			if isCollision {
 				move = false
 				g.EnemyCollision = &v
+				break
+			}
+		}
+		for _, v := range g.Tiles {
+			isCollision := playerRect.Overlaps(v.Hitbox(0, 0))
+			if isCollision {
+				move = false
 				break
 			}
 		}
@@ -263,6 +291,7 @@ func UpdateEnemies(g *Game) {
 }
 
 func UpdateProjectiles(g *Game) {
+	var remove []int
 	playerRect := g.Player.Hitbox(0, 0)
 	for i := 0; i < len(g.Projectiles); i++ {
 		if g.Projectiles[i].Dir == ebiten.KeyLeft {
@@ -274,9 +303,25 @@ func UpdateProjectiles(g *Game) {
 		} else if g.Projectiles[i].Dir == ebiten.KeyDown {
 			g.Projectiles[i].Y += g.Projectiles[i].Speed
 		}
-		if playerRect.Overlaps(g.Projectiles[i].Hitbox(0, 0)) {
+		hitbox := g.Projectiles[i].Hitbox(0, 0)
+		if hitbox.Overlaps(playerRect) {
 			g.ProjectileCollision = &g.Projectiles[i]
+		} else {
+			for _, c := range g.Characters {
+				if hitbox.Overlaps(c.Hitbox(0, 0)) {
+					remove = append(remove, i)
+				}
+			}
+
+			for _, d := range g.Doodads {
+				if hitbox.Overlaps(d.Hitbox(0, 0)) {
+					remove = append(remove, i)
+				}
+			}
 		}
+	}
+	for k, v := range remove {
+		g.Projectiles = Remove(g.Projectiles, v+k)
 	}
 }
 

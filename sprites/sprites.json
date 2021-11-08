@@ -168,9 +168,21 @@
     },
     {
         "frameLen": 1,
+        "frameHeight": 16,
+        "frameWidth": 16,
+        "image": "grass.png"
+    },
+    {
+        "frameLen": 1,
         "frameHeight": 32,
         "frameWidth": 32,
         "image": "stump.png"
+    },
+    {
+        "frameLen": 1,
+        "frameHeight": 80,
+        "frameWidth": 64,
+        "image": "tree.png"
     },
     {
         "frameDuration": 1,

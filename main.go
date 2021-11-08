@@ -2,11 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"image"
 	"image/color"
 	_ "image/png"
 	"log"
 	"os"
+	"sort"
 	"strings"
 
 	"golang.org/x/image/font"
@@ -19,62 +19,21 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/text"
 )
 
-func Contains(a []string, s string) bool {
-	for _, v := range a {
-		if s == v {
-			return true
-		}
-	}
-	return false
-}
-
-func Remove(p []Projectile, i int) []Projectile {
-	p[i] = p[len(p)-1]
-	return p[:len(p)-1]
-}
-
-func Min(x, y int) int {
-	if x < y {
-		return x
-	}
-	return y
-}
-
-func Max(x, y int) int {
-	if x > y {
-		return x
-	}
-	return y
-}
-
-func AbsDiff(x, y int) int {
-	if x < y {
-		return y - x
-	}
-	return x - y
-}
-
-func CamelCase(s string) string {
-	var snek bool
-	var camel string
-	for i := 0; i < len(s); i++ {
-		char := string(s[i])
-		if char == "_" {
-			snek = true
-			continue
-		}
-		if snek {
-			snek = false
-			camel += strings.ToUpper(char)
-		} else {
-			camel += char
-		}
-	}
-	return camel
-}
-
-type Collider interface {
-	Hitbox(x, y int) image.Rectangle
+// Game is an ebiten Game interface implemetation plus custom struct data
+type Game struct {
+	Player              Player
+	Characters          []Character
+	Enemies             []Enemy
+	Projectiles         []Projectile
+	Doodads             []Doodad
+	Tiles               []Tile
+	RenderTargets       []*RenderTarget
+	Sprites             map[string]Sprite
+	Font                font.Face
+	Options             *ebiten.DrawImageOptions
+	InteractionTarget   InteractionTarget // The target of another game element that the player is having a dialogue interaction with, or nil.
+	EnemyCollision      *Enemy
+	ProjectileCollision *Projectile
 }
 
 type InteractionTarget interface {
@@ -85,21 +44,6 @@ type InteractionTarget interface {
 	AdvanceRune()        // Advances to the next rune
 	AdvancePhrase()      // Advances to the next phrase
 	IsExhausted() bool   // Returns true if the current dialogue tree is complete
-}
-
-// Game is an ebiten Game interface implemetation plus custom struct data
-type Game struct {
-	Player              Player
-	Characters          []Character
-	Enemies             []Enemy
-	Projectiles         []Projectile
-	Doodads             []Doodad
-	Sprites             map[string]Sprite
-	Font                font.Face
-	Options             *ebiten.DrawImageOptions
-	InteractionTarget   InteractionTarget // The target of another game element that the player is having a dialogue interaction with, or nil.
-	EnemyCollision      *Enemy
-	ProjectileCollision *Projectile
 }
 
 // Player represents the player character
@@ -224,6 +168,15 @@ type Doodad struct {
 	FrameNum int    // The current frame of the sprite for the doodad
 }
 
+// Tile represents a floor texture
+type Tile struct {
+	X        int    // The current X screen offset of the doodad
+	Y        int    // The current Y screen offset of the doodad
+	Sprite   Sprite // The current sprite for the doodad
+	FrameNum int    // The current frame of the sprite for the doodad
+	Collider bool   // Whether or not the tile can be collided with
+}
+
 // Sprite represents an image with a number of sub-frames in it to be rendered via rectangles
 type Sprite struct {
 	FrameWidth  int
@@ -283,52 +236,6 @@ func IsLeastKeyPressDuration(key ebiten.Key) bool {
 		(key == ebiten.KeyRight || d < right || right == 0)
 }
 
-// Hitbox returns a player hitbox rectangle offset by x and y, and simulates perspective
-func (p *Player) Hitbox(x, y int) image.Rectangle {
-	// ebiten renders from the min vertex (top left)
-	// To simulate render from the center of "feet" of sprites, we tranlate up (negative Y) by the sprite height and left (negative X) by half the sprite width
-	// To simulate perspective, we also limit the hitbox to the bottom half of the sprite by translating the min point down (positive Y) by half the sprite height
-	// This results in a translating up (negative Y by half the sprite height)
-	offset := p.Sprite.FrameHeight / 2
-	return image.Rect(p.X+x-p.Sprite.FrameWidth/2, p.Y+y-offset, p.X+x+p.Sprite.FrameWidth/2, p.Y+y)
-}
-
-// Hitbox returns a character hitbox rectangle offset by x and y, and simulates perspective
-func (c *Character) Hitbox(x, y int) image.Rectangle {
-	// ebiten renders from the min vertex (top left)
-	// To simulate render from the center of "feet" of sprites, we tranlate up (negative Y) by the sprite height and left (negative X) by half the sprite width
-	// To simulate perspective, we also limit the hitbox to the bottom half of the sprite by translating the min point down (positive Y) by half the sprite height
-	// This results in a translating up (negative Y by half the sprite height)
-	offset := c.Sprite.FrameHeight / 2
-	return image.Rect(c.X+x-c.Sprite.FrameWidth/2, c.Y+y-offset, c.X+x+c.Sprite.FrameWidth/2, c.Y+y)
-}
-
-// Hitbox returns a character hitbox rectangle offset by x and y, and simulates perspective
-func (e *Enemy) Hitbox(x, y int) image.Rectangle {
-	// ebiten renders from the min vertex (top left)
-	// To simulate render from the center of "feet" of sprites, we tranlate up (negative Y) by the sprite height and left (negative X) by half the sprite width
-	// To simulate perspective, we also limit the hitbox to the bottom half of the sprite by translating the min point down (positive Y) by half the sprite height
-	// This results in a translating up (negative Y by half the sprite height)
-	offset := e.Sprite.FrameHeight / 2
-	return image.Rect(e.X+x-e.Sprite.FrameWidth/2, e.Y+y-offset, e.X+x+e.Sprite.FrameWidth/2, e.Y+y)
-}
-
-// Hitbox returns a doodad hitbox rectangle offset by x and y
-func (d *Doodad) Hitbox(x, y int) image.Rectangle {
-	offset := d.Sprite.FrameHeight
-	return image.Rect(d.X+x-d.Sprite.FrameWidth/2, d.Y+y-offset, d.X+x+d.Sprite.FrameWidth/2, d.Y+y)
-}
-
-// Hitbox returns a character hitbox rectangle offset by x and y, and simulates perspective
-func (p Projectile) Hitbox(x, y int) image.Rectangle {
-	// ebiten renders from the min vertex (top left)
-	// To simulate render from the center of "feet" of sprites, we tranlate up (negative Y) by the sprite height and left (negative X) by half the sprite width
-	// To simulate perspective, we also limit the hitbox to the bottom half of the sprite by translating the min point down (positive Y) by half the sprite height
-	// This results in a translating up (negative Y by half the sprite height)
-	offset := p.Sprite.FrameHeight / 2
-	return image.Rect(p.X+x-p.Sprite.FrameWidth/2, p.Y+y-offset, p.X+x+p.Sprite.FrameWidth/2, p.Y+y)
-}
-
 func (g *Game) Update() error {
 
 	UpdateInteraction(g)
@@ -346,37 +253,33 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	for _, d := range g.Doodads {
-		g.Options.GeoM.Reset()
-		g.Options.GeoM.Translate(float64(d.X-d.Sprite.FrameWidth/2), float64(d.Y-d.Sprite.FrameHeight))
-		screen.DrawImage(d.Sprite.Image, g.Options)
+	render := []RenderTarget{&g.Player}
+
+	for i := range g.Characters {
+		render = append(render, &g.Characters[i])
 	}
 
-	for _, e := range g.Enemies {
-		g.Options.GeoM.Reset()
-		g.Options.GeoM.Translate(float64(e.X-e.Sprite.FrameWidth/2), float64(e.Y-e.Sprite.FrameHeight))
-		screen.DrawImage(e.Sprite.Image, g.Options)
+	for i := range g.Enemies {
+		render = append(render, &g.Enemies[i])
 	}
 
-	for _, c := range g.Characters {
-		g.Options.GeoM.Reset()
-		// ebiten renders from the min vertex (top left). Offset by the frameheight and half the framewidth to emulate rendering from the "feet" of the sprite
-		g.Options.GeoM.Translate(float64(c.X-c.Sprite.FrameWidth/2), float64(c.Y-c.Sprite.FrameHeight))
-		// sub-rect is the width of a frame times the frame number, plus the frame number for the 1-pixel buffer between frames
-		screen.DrawImage(c.Sprite.Image.SubImage(image.Rect(c.Sprite.FrameWidth*c.FrameNum+c.FrameNum, 0, c.Sprite.FrameWidth*c.FrameNum+c.FrameNum+c.Sprite.FrameWidth, c.Sprite.FrameHeight)).(*ebiten.Image), g.Options)
+	for i := range g.Doodads {
+		render = append(render, &g.Doodads[i])
 	}
 
-	for _, p := range g.Projectiles {
-		g.Options.GeoM.Reset()
-		g.Options.GeoM.Translate(float64(p.X-p.Sprite.FrameWidth/2), float64(p.Y-p.Sprite.FrameHeight))
-		screen.DrawImage(p.Sprite.Image, g.Options)
+	for i := range g.Tiles {
+		render = append(render, &g.Tiles[i])
 	}
 
-	g.Options.GeoM.Reset()
-	// ebiten renders from the min vertex (top left). Offset by the frameheight and half the framewidth to emulate rendering from the "feet" of the sprite
-	g.Options.GeoM.Translate(float64(g.Player.X-g.Player.Sprite.FrameWidth/2), float64(g.Player.Y-g.Player.Sprite.FrameHeight))
-	// sub-rect is the width of a frame times the frame number, plus the frame number for the 1-pixel buffer between frames
-	screen.DrawImage(g.Player.Sprite.Image.SubImage(image.Rect(g.Player.Sprite.FrameWidth*g.Player.FrameNum+g.Player.FrameNum, 0, g.Player.Sprite.FrameWidth*g.Player.FrameNum+g.Player.FrameNum+g.Player.Sprite.FrameWidth, g.Player.Sprite.FrameHeight)).(*ebiten.Image), g.Options)
+	for i := range g.Projectiles {
+		render = append(render, &g.Projectiles[i])
+	}
+
+	sort.Slice(render, func(i, j int) bool { return render[i].RenderOrder() < render[j].RenderOrder() })
+
+	for _, t := range render {
+		screen.DrawImage(t.RenderSprite(), t.RenderOptions())
+	}
 
 	// If in a text interaction, draw the text box last over eveything else.
 	if g.InteractionTarget != nil {
@@ -521,6 +424,35 @@ func main() {
 
 	op := &ebiten.DrawImageOptions{}
 
+	var tiles []Tile
+
+	for x := 8; x < 320; x += 16 {
+		for y := 16; y < 320; y += 16 {
+			tiles = append(tiles, Tile{
+				X:        x,
+				Y:        y,
+				FrameNum: 0,
+				Sprite:   linkSprites["grass"],
+			})
+		}
+	}
+
+	tiles = append(tiles, Tile{
+		X:        64,
+		Y:        128,
+		FrameNum: 0,
+		Sprite:   linkSprites["stump"],
+		Collider: true,
+	})
+
+	tiles = append(tiles, Tile{
+		X:        96,
+		Y:        160,
+		FrameNum: 0,
+		Sprite:   linkSprites["stump"],
+		Collider: true,
+	})
+
 	game := &Game{
 		Player: Player{
 			X:         8,
@@ -533,8 +465,8 @@ func main() {
 		},
 		Characters: []Character{
 			{
-				X:              100,
-				Y:              50,
+				X:              32,
+				Y:              32,
 				FrameNum:       0,
 				Sprite:         linkSprites["elderStandSouth"],
 				DialogueGraphs: dialogueGraphs,
@@ -543,8 +475,8 @@ func main() {
 		},
 		Enemies: []Enemy{
 			{
-				X:        200,
-				Y:        100,
+				X:        256,
+				Y:        128,
 				FrameNum: 0,
 				Sprite:   linkSprites["skeletonWizardStandSouth"],
 				Behavior: Behavior{
@@ -554,18 +486,19 @@ func main() {
 		},
 		Doodads: []Doodad{
 			{
-				X:        100,
-				Y:        100,
+				X:        128,
+				Y:        128,
 				FrameNum: 0,
-				Sprite:   linkSprites["stump"],
+				Sprite:   linkSprites["tree"],
 			},
 			{
-				X:        132,
-				Y:        132,
+				X:        256,
+				Y:        256,
 				FrameNum: 0,
-				Sprite:   linkSprites["stump"],
+				Sprite:   linkSprites["tree"],
 			},
 		},
+		Tiles:   tiles,
 		Sprites: linkSprites,
 		Font:    face,
 		Options: op,
