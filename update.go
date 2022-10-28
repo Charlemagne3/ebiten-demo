@@ -66,6 +66,8 @@ func UpdatePlayer(g *Game) {
 			g.Player.FrameNum = g.Player.FrameNum % (g.Player.Sprite.FrameLen - 1)
 			// End the animation if the last render was the last frame
 			if g.Player.Animation && g.Player.FrameNum == 0 {
+				g.Player.Weapon.IsAttacking = false
+				g.Player.Weapon.FrameNum = 0
 				g.Player.Animation = false
 				animEnd = true
 			}
@@ -268,6 +270,9 @@ func UpdatePlayer(g *Game) {
 		g.Player.Animation = true
 		g.Player.FrameNum = 0
 		g.Player.FrameDur = 0
+		g.Player.Weapon.FrameNum = 0
+		g.Player.Weapon.Wielder = &g.Player
+		g.Player.Weapon.IsAttacking = true
 		if g.Player.LastDir == ebiten.KeyLeft {
 			g.Player.Sprite = g.Sprites["linkAttackWest"]
 		} else if g.Player.LastDir == ebiten.KeyRight {
@@ -292,7 +297,6 @@ func UpdateEnemies(g *Game) {
 
 func UpdateProjectiles(g *Game) {
 	var remove []int
-	playerRect := g.Player.Hitbox(0, 0)
 	for i := 0; i < len(g.Projectiles); i++ {
 		if g.Projectiles[i].Dir == ebiten.KeyLeft {
 			g.Projectiles[i].X -= g.Projectiles[i].Speed
@@ -303,19 +307,42 @@ func UpdateProjectiles(g *Game) {
 		} else if g.Projectiles[i].Dir == ebiten.KeyDown {
 			g.Projectiles[i].Y += g.Projectiles[i].Speed
 		}
+		if g.Projectiles[i].X < -640 || g.Projectiles[i].X > 1280 || g.Projectiles[i].Y < -480 || g.Projectiles[i].Y > 960 {
+			remove = append(remove, i)
+			continue
+		}
 		hitbox := g.Projectiles[i].Hitbox(0, 0)
-		if hitbox.Overlaps(playerRect) {
-			g.ProjectileCollision = &g.Projectiles[i]
-		} else {
+		if g.Projectiles[i].IsEnemy {
+			if hitbox.Overlaps(g.Player.Hitbox(0, 0)) {
+				g.ProjectileCollision = &g.Projectiles[i]
+				continue
+			}
+
 			for _, c := range g.Characters {
 				if hitbox.Overlaps(c.Hitbox(0, 0)) {
 					remove = append(remove, i)
+					continue
 				}
 			}
 
 			for _, d := range g.Doodads {
 				if hitbox.Overlaps(d.Hitbox(0, 0)) {
 					remove = append(remove, i)
+					continue
+				}
+			}
+		} else {
+			for _, e := range g.Enemies {
+				if hitbox.Overlaps(e.Hitbox(0, 0)) {
+					remove = append(remove, i)
+					continue
+				}
+			}
+
+			for _, d := range g.Doodads {
+				if hitbox.Overlaps(d.Hitbox(0, 0)) {
+					remove = append(remove, i)
+					continue
 				}
 			}
 		}

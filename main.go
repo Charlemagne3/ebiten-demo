@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"image"
 	"image/color"
 	_ "image/png"
 	"log"
@@ -24,6 +25,7 @@ type Game struct {
 	Player              Player
 	Characters          []Character
 	Enemies             []Enemy
+	Weapons             []Weapon
 	Projectiles         []Projectile
 	Doodads             []Doodad
 	Tiles               []Tile
@@ -56,6 +58,7 @@ type Player struct {
 	FrameNum  int        // The current frame of the sprite for the player
 	FrameDur  int        // The duration of the current frame of the sprite for the player
 	Health    int        // How much health the player has
+	Weapon    *Weapon    // The weapon the player has equipped
 }
 
 type DialogueGraph struct {
@@ -150,6 +153,14 @@ type Enemy struct {
 	Behavior  Behavior   // The active behavior of the enemy
 }
 
+// Weapon represents a weapon held by something
+type Weapon struct {
+	Sprite      Sprite       // The current sprite for the weapon
+	FrameNum    int          // The current frame of the sprite for the weapon
+	Wielder     RenderTarget // The wielder of the weapon. The weapon is drawn relative to the wielder.
+	IsAttacking bool         // Whether or not the weapon is attacking and should be drawn.
+}
+
 // Projectile represents a projectile
 type Projectile struct {
 	X        int        // The current X screen offset of the projectile
@@ -158,6 +169,7 @@ type Projectile struct {
 	FrameNum int        // The current frame of the sprite for the projectile
 	Speed    int        // The number of pixels the projectile moves per frame
 	Dir      ebiten.Key // The direction the projection is travelling
+	IsEnemy  bool       // Whether or not the projecile is enemy or friendly
 }
 
 // Doodad represents a static environmental item
@@ -181,18 +193,20 @@ type Tile struct {
 type Sprite struct {
 	FrameWidth  int
 	FrameHeight int
-	FrameLen    int // How many frames are in the sprite
-	FrameDur    int // How many render frames to display a single frame of the sprite
+	FrameLen    int           // How many frames are in the sprite
+	FrameDur    int           // How many render frames to display a single frame of the sprite
+	Handles     []image.Point // An array of coordinates inside the sprite for attaching other sprites to
 	Image       *ebiten.Image
 }
 
 // SpriteJSON represents the json to be read from the sprite json file.
 type SpriteJSON struct {
-	FrameDur    int    `json:"frameDuration"`
-	FrameLen    int    `json:"frameLen"`
-	FrameHeight int    `json:"frameHeight"`
-	FrameWidth  int    `json:"frameWidth"`
-	Image       string `json:"image"`
+	FrameDur    int           `json:"frameDuration"`
+	FrameLen    int           `json:"frameLen"`
+	FrameHeight int           `json:"frameHeight"`
+	FrameWidth  int           `json:"frameWidth"`
+	Handles     []image.Point `json:"handles"`
+	Image       string        `json:"image"`
 }
 
 // DialogueJSON represents the json to be read from the dialogue json file.
@@ -254,6 +268,9 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	render := []RenderTarget{&g.Player}
+	if g.Player.Weapon.IsAttacking {
+		render = append(render, g.Player.Weapon)
+	}
 
 	for i := range g.Characters {
 		render = append(render, &g.Characters[i])
@@ -278,7 +295,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	sort.Slice(render, func(i, j int) bool { return render[i].RenderOrder() < render[j].RenderOrder() })
 
 	for _, t := range render {
-		screen.DrawImage(t.RenderSprite(), t.RenderOptions())
+		screen.DrawImage(t.RenderImage(), t.RenderOptions())
 	}
 
 	// If in a text interaction, draw the text box last over eveything else.
@@ -366,6 +383,7 @@ func main() {
 			FrameLen:    v.FrameLen,
 			FrameHeight: v.FrameHeight,
 			FrameWidth:  v.FrameWidth,
+			Handles:     v.Handles,
 			Image:       sprite,
 		}
 	}
@@ -453,6 +471,12 @@ func main() {
 		Collider: true,
 	})
 
+	weapons := []Weapon{
+		{
+			Sprite: linkSprites["swordEast"],
+		},
+	}
+
 	game := &Game{
 		Player: Player{
 			X:         8,
@@ -462,6 +486,7 @@ func main() {
 			FrameNum:  0,
 			Sprite:    sprite,
 			Health:    100,
+			Weapon:    &weapons[0],
 		},
 		Characters: []Character{
 			{
@@ -499,6 +524,7 @@ func main() {
 			},
 		},
 		Tiles:   tiles,
+		Weapons: weapons,
 		Sprites: linkSprites,
 		Font:    face,
 		Options: op,

@@ -55,3 +55,11 @@ func CamelCase(s string) string {
 	}
 	return camel
 }
+
+func (c *Character) Equal(v *Character) bool {
+	return c.X == v.X && c.Y == v.Y && c.Sprite.Image == v.Sprite.Image
+}
+
+func (e *Enemy) Equal(v *Enemy) bool {
+	return e.X == v.X && e.Y == v.Y && e.Sprite.Image == v.Sprite.Image
+}

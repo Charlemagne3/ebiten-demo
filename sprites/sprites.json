@@ -56,6 +56,40 @@
         "frameLen": 8,
         "frameHeight": 24,
         "frameWidth": 16,
+        "handles": [
+            {
+                "X": 9,
+                "Y": 11
+            },
+            {
+                "X": 9,
+                "Y": 11
+            },
+            {
+                "X": 9,
+                "Y": 9
+            },
+            {
+                "X": 9,
+                "Y": 7
+            },
+            {
+                "X": 9,
+                "Y": 9
+            },
+            {
+                "X": 9,
+                "Y": 11
+            },
+            {
+                "X": 9,
+                "Y": 11
+            },
+            {
+                "X": 9,
+                "Y": 11
+            }
+        ],
         "image": "link_attack_south.png"
     },
     {
@@ -63,6 +97,40 @@
         "frameLen": 8,
         "frameHeight": 27,
         "frameWidth": 16,
+        "handles": [
+            {
+                "X": 9,
+                "Y": 11
+            },
+            {
+                "X": 9,
+                "Y": 11
+            },
+            {
+                "X": 9,
+                "Y": 9
+            },
+            {
+                "X": 9,
+                "Y": 7
+            },
+            {
+                "X": 9,
+                "Y": 9
+            },
+            {
+                "X": 9,
+                "Y": 11
+            },
+            {
+                "X": 9,
+                "Y": 11
+            },
+            {
+                "X": 9,
+                "Y": 11
+            }
+        ],
         "image": "link_attack_north.png"
     },
     {
@@ -70,6 +138,40 @@
         "frameLen": 8,
         "frameHeight": 23,
         "frameWidth": 24,
+        "handles": [
+            {
+                "X": 5,
+                "Y": 13
+            },
+            {
+                "X": 5,
+                "Y": 13
+            },
+            {
+                "X": 3,
+                "Y": 16
+            },
+            {
+                "X": 1,
+                "Y": 16
+            },
+            {
+                "X": 3,
+                "Y": 16
+            },
+            {
+                "X": 5,
+                "Y": 12
+            },
+            {
+                "X": 5,
+                "Y": 12
+            },
+            {
+                "X": 5,
+                "Y": 12
+            }
+        ],
         "image": "link_attack_west.png"
     },
     {
@@ -77,6 +179,40 @@
         "frameLen": 8,
         "frameHeight": 23,
         "frameWidth": 24,
+        "handles": [
+            {
+                "X": 19,
+                "Y": 13
+            },
+            {
+                "X": 19,
+                "Y": 13
+            },
+            {
+                "X": 21,
+                "Y": 16
+            },
+            {
+                "X": 23,
+                "Y": 16
+            },
+            {
+                "X": 21,
+                "Y": 16
+            },
+            {
+                "X": 19,
+                "Y": 12
+            },
+            {
+                "X": 19,
+                "Y": 12
+            },
+            {
+                "X": 19,
+                "Y": 12
+            }
+        ],
         "image": "link_attack_east.png"
     },
     {
@@ -183,6 +319,19 @@
         "frameHeight": 80,
         "frameWidth": 64,
         "image": "tree.png"
+    },
+    {
+        "frameDuration": 1,
+        "frameLen": 1,
+        "frameHeight": 16,
+        "frameWidth": 16,
+        "handles": [
+            {
+                "X": 3,
+                "Y": 8
+            }
+        ],
+        "image": "sword_east.png"
     },
     {
         "frameDuration": 1,

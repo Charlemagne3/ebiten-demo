@@ -35,6 +35,7 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 				FrameNum: 0,
 				Speed:    3,
 				Dir:      ebiten.KeyDown,
+				IsEnemy:  true,
 			})
 		} else if enemyRect.Max.Y > playerRect.Max.Y {
 			e.Behavior.Command = "attack_north"
@@ -46,6 +47,7 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 				FrameNum: 0,
 				Speed:    3,
 				Dir:      ebiten.KeyUp,
+				IsEnemy:  true,
 			})
 		}
 	} else if enemyRect.Max.Y == playerRect.Max.Y {
@@ -59,6 +61,7 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 				FrameNum: 0,
 				Speed:    3,
 				Dir:      ebiten.KeyRight,
+				IsEnemy:  true,
 			})
 		} else if enemyRect.Max.X > playerRect.Max.X {
 			e.Behavior.Command = "attack_west"
@@ -70,6 +73,7 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 				FrameNum: 0,
 				Speed:    3,
 				Dir:      ebiten.KeyLeft,
+				IsEnemy:  true,
 			})
 		}
 	} else {
@@ -80,7 +84,7 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 				move := true
 				enemyRect := e.Hitbox(1, 0)
 				for _, v := range g.Enemies {
-					isCollision := *e != v && enemyRect.Overlaps(v.Hitbox(0, 0))
+					isCollision := !e.Equal(&v) && enemyRect.Overlaps(v.Hitbox(0, 0))
 					if isCollision {
 						move = false
 						break
@@ -113,7 +117,7 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 				move := true
 				enemyRect := e.Hitbox(-1, 0)
 				for _, v := range g.Enemies {
-					isCollision := *e != v && enemyRect.Overlaps(v.Hitbox(0, 0))
+					isCollision := !e.Equal(&v) && enemyRect.Overlaps(v.Hitbox(0, 0))
 					if isCollision {
 						move = false
 						break
@@ -148,7 +152,7 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 				move := true
 				enemyRect := e.Hitbox(0, 1)
 				for _, v := range g.Enemies {
-					isCollision := *e != v && enemyRect.Overlaps(v.Hitbox(0, 0))
+					isCollision := !e.Equal(&v) && enemyRect.Overlaps(v.Hitbox(0, 0))
 					if isCollision {
 						move = false
 						break
@@ -181,7 +185,7 @@ func AdvanceBehavior(g *Game, e *Enemy) {
 				move := true
 				enemyRect := e.Hitbox(0, -1)
 				for _, v := range g.Enemies {
-					isCollision := *e != v && enemyRect.Overlaps(v.Hitbox(0, 0))
+					isCollision := !e.Equal(&v) && enemyRect.Overlaps(v.Hitbox(0, 0))
 					if isCollision {
 						move = false
 						break
